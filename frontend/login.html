@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monash University Login</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            transform: translateY(0);
+            transition: all 0.3s ease;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(45deg, #003d82, #0066cc);
+            border-radius: 50%;
+            margin: 0 auto 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 1.8rem;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        .login-section {
+            margin-bottom: 2rem;
+        }
+
+        .google-btn-container {
+            display: flex;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #c33;
+            display: none;
+        }
+
+        .success-page {
+            display: none;
+        }
+
+        .success-icon {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            border-radius: 50%;
+            margin: 0 auto 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 3rem;
+        }
+
+        .user-info {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0;
+        }
+
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 0 auto 1rem;
+            display: block;
+        }
+
+        .logout-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .footer {
+            margin-top: 2rem;
+            color: #999;
+            font-size: 0.85rem;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Login Page -->
+        <div id="loginPage" class="login-section">
+            <div class="logo">M</div>
+            <h1>Welcome to Monash</h1>
+            <p class="subtitle">Sign in with your Monash University account</p>
+            
+            <div class="error-message" id="errorMessage"></div>
+            
+            <div class="google-btn-container">
+                <div id="g_id_onload"
+                     data-client_id="YOUR_GOOGLE_CLIENT_ID"
+                     data-context="signin"
+                     data-ux_mode="popup"
+                     data-callback="handleCredentialResponse"
+                     data-auto_prompt="false">
+                </div>
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-shape="rectangular"
+                     data-theme="outline"
+                     data-text="signin_with"
+                     data-size="large"
+                     data-logo_alignment="left">
+                </div>
+            </div>
+            
+            <div class="footer">
+                Only @monash.edu email addresses are permitted
+            </div>
+        </div>
+
+        <!-- Success Page -->
+        <div id="successPage" class="success-page">
+            <div class="success-icon">✓</div>
+            <h1>Welcome!</h1>
+            <p class="subtitle">You have successfully signed in</p>
+            
+            <div class="user-info" id="userInfo">
+                <img id="userAvatar" class="user-avatar" src="" alt="User Avatar">
+                <h3 id="userName"></h3>
+                <p id="userEmail"></p>
+            </div>
+            
+            <button class="logout-btn" onclick="logout()">Sign Out</button>
+            
+            <div class="footer">
+                Welcome to the Monash University portal
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+
+        // Replace this Client ID with your new one from Google Cloud Console
+        // Current ID: 967640988805-u7ru31i8g7gcmgv65gtq9pdlr7nked7u.apps.googleusercontent.com
+        // Make sure APIs are enabled: Google+ API, Google Sign-In API, IAM API
+        // OAuth consent screen must be configured with test users added
+        function handleCredentialResponse(response) {
+            try {
+                // Decode the JWT token
+                const payload = parseJwt(response.credential);
+                
+                // Check if email ends with @monash.edu
+                if (!payload.email.endsWith('@monash.edu')) {
+                    showError('Access denied. Only @monash.edu email addresses are allowed.');
+                    return;
+                }
+                
+                // Store user data
+                currentUser = {
+                    email: payload.email,
+                    name: payload.name,
+                    picture: payload.picture
+                };
+                
+                // Show success page
+                showSuccessPage();
+                
+            } catch (error) {
+                console.error('Sign-in error:', error);
+                showError('Sign-in failed. Please try again.');
+            }
+        }
+
+        // Function to decode JWT token
+        function parseJwt(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        }
+
+        // Initialize real Google Sign-In
+        document.addEventListener('DOMContentLoaded', function() {
+            // The Google Sign-In will be automatically initialized by the Google script
+            console.log('Google Sign-In initialized with real OAuth');
+        });
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            // Hide error after 5 seconds
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showSuccessPage() {
+            const loginPage = document.getElementById('loginPage');
+            const successPage = document.getElementById('successPage');
+            
+            // Update user information
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userEmail').textContent = currentUser.email;
+            document.getElementById('userAvatar').src = currentUser.picture;
+            
+            // Transition to success page
+            loginPage.style.display = 'none';
+            successPage.style.display = 'block';
+            successPage.classList.add('fade-in');
+        }
+
+        function logout() {
+            currentUser = null;
+            
+            const loginPage = document.getElementById('loginPage');
+            const successPage = document.getElementById('successPage');
+            
+            successPage.style.display = 'none';
+            loginPage.style.display = 'block';
+            loginPage.classList.add('fade-in');
+            
+            // Clear any error messages
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        // Instructions for implementing real Google Sign-In
+        console.log(`
+        🔧 To implement real Google Sign-In:
+        
+        1. Get a Google Client ID from Google Cloud Console
+        2. Replace 'YOUR_GOOGLE_CLIENT_ID' with your actual client ID
+        3. The handleCredentialResponse function will receive a real JWT token
+        4. Decode the JWT to get user information
+        5. Remove the demo simulation code
+        
+        For now, click the Google Sign-In button to see the demo!
+        `);
+    </script>
+</body>
+</html>
