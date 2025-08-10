@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, JSON, Float, Text
@@ -19,9 +19,20 @@ import io
 from enum import Enum
 
 # Database setup
+import os
 SQLALCHEMY_DATABASE_URL = "sqlite:///./voting_system.db"
+
+# Delete old database if it exists to ensure clean schema
+if os.path.exists("voting_system.db"):
+    print("⚠️  Existing database found. Deleting to ensure clean schema...")
+    os.remove("voting_system.db")
+    print("✅ Old database removed.")
+
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Fix for SQLAlchemy 2.0 deprecation warning
+from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 # FastAPI app
@@ -164,7 +175,9 @@ class AuditLog(Base):
     election = relationship("Election", back_populates="audit_logs")
 
 # Create tables
+print("📊 Creating database tables...")
 Base.metadata.create_all(bind=engine)
+print("✅ Database tables created successfully!")
 
 # Pydantic models
 class ElectionCreate(BaseModel):
@@ -206,13 +219,15 @@ class BallotSubmission(BaseModel):
     preferences: Dict[int, int]  # candidate_id: preference_rank
     voter_traits: VoterTraits
     
-    @validator('google_user_info')
+    @field_validator('google_user_info')
+    @classmethod
     def validate_monash_email(cls, v):
         if not v.email.endswith('@student.monash.edu'):
             raise ValueError('Must be a valid @student.monash.edu email address')
         return v
     
-    @validator('preferences')
+    @field_validator('preferences')
+    @classmethod
     def validate_preferences(cls, v):
         ranks = list(v.values())
         if sorted(ranks) != list(range(1, len(ranks) + 1)):
