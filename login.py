@@ -538,115 +538,168 @@ LOGIN_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
-VOTING_DASHBOARD = """<!DOCTYPE html>
-<html>
+VOTING_DASHBOARD = """
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>NilouVoter - Voting Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4285f4; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        .user-info { background-color: #f0f0f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .user-info img { border-radius: 50%; width: 50px; height: 50px; vertical-align: middle; margin-right: 10px; }
-        .elections-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .election-card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .election-card h3 { margin-top: 0; color: #333; }
-        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-        .status-active { background-color: #d4edda; color: #155724; }
-        .status-closed { background-color: #f8d7da; color: #721c24; }
-        .status-scheduled { background-color: #fff3cd; color: #856404; }
-        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; }
-        .btn-primary { background-color: #4285f4; color: white; }
-        .btn-primary:hover { background-color: #357ae8; }
-        .btn-secondary { background-color: #6c757d; color: white; }
-        .btn-secondary:hover { background-color: #5a6268; }
-        .btn-danger { background-color: #ea4335; color: white; }
-        .btn-danger:hover { background-color: #d33b2c; }
-        .admin-panel { background-color: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        .loading { text-align: center; padding: 20px; }
-        .error-msg { color: #d93025; background-color: #fce8e6; border: 1px solid #d93025; border-radius: 4px; padding: 10px; margin: 10px 0; }
-        .success-msg { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 10px; margin: 10px 0; }
-    </style>
+  <meta charset="utf-8" />
+  <title>NilouVoter — Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html,body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    :root { --bg:#f7f8fb; --text:#0f172a; --muted:#334155; --card:#ffffff; --ring:rgba(2,6,23,.08); --subtle:rgba(15,23,42,.04); }
+    .dark { --bg:#0b1020; --text:#e6e7ec; --muted:#cdd3e0; --card:rgba(255,255,255,.05); --ring:rgba(255,255,255,.12); --subtle:rgba(255,255,255,.04); }
+    body{background:var(--bg); color:var(--text)}
+    .card{background:var(--card); box-shadow:0 1px 0 var(--ring) inset, 0 6px 18px rgba(2,6,23,.06); border:1px solid var(--ring)}
+    .chip{background:var(--subtle); border:1px solid var(--ring); color:var(--muted)}
+    .muted{color:var(--muted)}
+    .lynette-gradient{background-image:linear-gradient(135deg,#a78bfa,#22d3ee)}
+    .lynette-acc{background-color:#a78bfa1a; border-color:#a78bfa40; color:#6d28d9}
+    .lynette-bg:before{content:""; position:fixed; right:-40px; bottom:-20px; width:360px; height:360px; background:url('https://static.icy-veins.com/images/genshin-impact/characters/lynette.webp') no-repeat center/cover; opacity:.08; filter:saturate(120%); pointer-events:none; z-index:0}
+    .header-blur{backdrop-filter:saturate(120%) blur(8px)}
+    /* error overlay */
+    #nv-error{position:fixed;left:12px;bottom:12px;z-index:50;max-width:90%;display:none}
+    #nv-error .box{background:#fee2e2;color:#7f1d1d;border:1px solid #fecaca;border-radius:12px;padding:12px 14px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;white-space:pre-wrap}
+  </style>
+
+  <!-- Libs (React + HTM) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+  <!-- Dayjs is optional; we guard usage below -->
+  <script src="https://unpkg.com/dayjs@1/dayjs.min.js"></script>
+  <script src="https://unpkg.com/dayjs@1/plugin/utc.js"></script>
+  <script src="https://unpkg.com/dayjs@1/plugin/timezone.js"></script>
+  <script src="https://unpkg.com/dayjs@1/plugin/relativeTime.js"></script>
 </head>
-<body>
-    <div class="header">
-        <h1>NilouVoter - Voting Dashboard</h1>
-        <p>Monash Student Council Electronic Voting System</p>
-    </div>
-    
-    <div class="user-info">
-        {% if user_info.picture %}<img src="{{ user_info.picture }}" alt="Profile Picture">{% endif %}
-        <strong>{{ user_info.name }}</strong> ({{ user_info.email }})
-        {% if is_admin %}<span class="status-badge" style="background: #e91e63; color: white; margin-left: 10px;">ADMIN</span>{% endif %}
-        <a href="{{ url_for('logout') }}" class="btn btn-danger" style="float: right;">Logout</a>
-    </div>
-    
-    {% if is_admin %}
-    <div class="admin-panel">
-        <h2>Admin Panel</h2>
-        <a href="{{ url_for('create_election_page') }}" class="btn btn-primary">Create New Election</a>
-        <a href="{{ url_for('view_audit_logs') }}" class="btn btn-secondary">View Audit Logs</a>
-        <a href="{{ url_for('manage_templates') }}" class="btn btn-secondary">Manage Templates</a>
-    </div>
-    {% endif %}
-    
-    <h2>Available Elections</h2>
-    <div id="elections-container" class="loading">Loading elections...</div>
-    
-    <script>
-        // Store user info and API token
-        const userInfo = {{ user_info | tojson }};
-        const apiToken = '{{ api_token }}';
-        const apiUrl = '{{ api_url }}';
-        
-        // Fetch elections
-        async function loadElections() {
-            try {
-                const response = await fetch(`${apiUrl}/api/elections`);
-                const elections = await response.json();
-                
-                const container = document.getElementById('elections-container');
-                container.classList.remove('loading');
-                
-                if (elections.length === 0) {
-                    container.innerHTML = '<p>No elections available at this time.</p>';
-                    return;
-                }
-                
-                container.innerHTML = '<div class="elections-grid">' + 
-                    elections.map(election => `
-                        <div class="election-card">
-                            <h3>${election.title}</h3>
-                            <p>${election.description || 'No description available'}</p>
-                            <p><strong>Start:</strong> ${new Date(election.start_time).toLocaleString()}</p>
-                            <p><strong>End:</strong> ${new Date(election.end_time).toLocaleString()}</p>
-                            <p>
-                                <span class="status-badge status-${election.status}">
-                                    ${election.status.toUpperCase()}
-                                </span>
-                                ${election.is_frozen ? '<span class="status-badge" style="background: #ff9800; color: white; margin-left: 5px;">FROZEN</span>' : ''}
-                            </p>
-                            ${election.status === 'active' && !election.is_frozen ? 
-                                `<a href="/vote/${election.id}" class="btn btn-primary">Vote Now</a>` : 
-                                election.status === 'closed' ? 
-                                `<a href="/results/${election.id}" class="btn btn-secondary">View Results</a>` :
-                                '<span style="color: #666;">Voting not available</span>'
-                            }
-                        </div>
-                    `).join('') + '</div>';
-            } catch (error) {
-                document.getElementById('elections-container').innerHTML = 
-                    '<div class="error-msg">Failed to load elections. Please try again later.</div>';
-            }
-        }
-        
-        // Load elections on page load
-        loadElections();
-        
-        // Refresh every 30 seconds
-        setInterval(loadElections, 30000);
-    </script>
-</body>
-</html>
+<body class="min-h-screen">
+  <div id="root"></div>
+  <div id="nv-error"><div class="box"></div></div>
+
+  <script>
+    // server data
+    window.__APP__ = {
+      user: {{ user_info | tojson }},
+      isAdmin: {{ 'true' if is_admin else 'false' }},
+      apiUrl: {{ api_url | tojson }},
+      apiToken: {{ (api_token or '') | tojson }}
+    };
+
+    // error overlay helper
+    function showErr(msg){
+      const el = document.getElementById('nv-error');
+      el.style.display='block';
+      el.querySelector('.box').textContent = msg;
+      console.error('[NilouVoter]', msg);
+    }
+    window.addEventListener('error', e => showErr(String(e.error || e.message || e)));
+    window.addEventListener('unhandledrejection', e => showErr(String(e.reason || e)));
+  </script>
+
+  <script type="text/javascript">
+    try {
+      const { useEffect, useMemo, useState } = React;
+      const html = htm.bind(React.createElement);
+
+      // guard dayjs plugins so missing CDN doesn't break render
+      if (window.dayjs) {
+        try { if (window.dayjs_plugin_utc) dayjs.extend(dayjs_plugin_utc); } catch {}
+        try { if (window.dayjs_plugin_timezone) dayjs.extend(dayjs_plugin_timezone); } catch {}
+        try { if (window.dayjs_plugin_relativeTime) dayjs.extend(dayjs_plugin_relativeTime); } catch {}
+      }
+
+      const getTheme = () => localStorage.getItem('nv-theme') || 'light';
+      const setTheme = t => localStorage.setItem('nv-theme', t);
+      const getLyn = () => localStorage.getItem('nv-lynette') === 'on';
+      const setLyn = v => localStorage.setItem('nv-lynette', v ? 'on' : 'off');
+
+      const Badge = ({ tone="info", children }) => {
+        const tones = {
+          info: "bg-blue-500/10 text-blue-700 dark:text-blue-200 ring-1 ring-blue-500/20",
+          success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-200 ring-1 ring-emerald-500/20",
+          danger: "bg-rose-500/10 text-rose-700 dark:text-rose-200 ring-1 ring-rose-500/20",
+          warning: "bg-amber-500/10 text-amber-700 dark:text-amber-200 ring-1 ring-amber-500/20",
+          admin: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-200 ring-1 ring-fuchsia-500/20",
+        };
+        return html`<span className={"px-2.5 py-1 rounded-full text-xs font-medium ${tones[tone]} select-none"}>${children}</span>`;
+      };
+
+      const Card = ({className="", children}) => html`<div className={"card rounded-2xl ${className}"}>${children}</div>`;
+
+      const Toggle = ({checked, onClick, label}) => html`
+        <button onClick=${onClick} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl chip hover:bg-black/5 dark:hover:bg-white/10 transition">
+          <span className="text-sm">${label}${checked ? ' ✓':''}</span>
+        </button>
+      `;
+
+      const Header = ({user, isAdmin, theme, setThemeState, lynette, setLynette}) => {
+        useEffect(()=>{
+          document.documentElement.classList.toggle('dark', theme === 'dark');
+          document.body.classList.toggle('lynette-bg', lynette);
+        }, [theme, lynette]);
+
+        return html`
+          <div className="sticky top-0 z-20 header-blur border-b" style="background:rgba(255,255,255,.7);border-color:var(--ring)">
+            <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl overflow-hidden" style="border:1px solid var(--ring)">
+                <img src="https://static.icy-veins.com/images/genshin-impact/characters/lynette.webp" alt="Lynette" className="w-full h-full object-cover"/>
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-lg leading-tight">NilouVoter</div>
+                <div className="muted text-xs -mt-0.5">Monash Student Council Electronic Voting</div>
+              </div>
+
+              ${lynette ? html`<${Badge} tone="admin">LYNETTE MODE</${Badge}>` : null}
+              ${isAdmin ? html`<${Badge} tone="admin">ADMIN</${Badge}>` : null}
+
+              <div className="flex items-center gap-2 ml-2">
+                <${Toggle}
+                  checked=${theme==='dark'}
+                  onClick=${() => { const t = theme==='dark' ? 'light' : 'dark'; setTheme(t); setThemeState(t); }}
+                  label="Theme"
+                />
+                <${Toggle}
+                  checked=${lynette}
+                  onClick=${() => { const v = !lynette; setLyn(v); setLynette(v); }}
+                  label="Lynette mode"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pl-2">
+                ${user?.picture ? html`<img src=${user.picture} className="w-9 h-9 rounded-full" style="border:1px solid var(--ring)" alt="pfp" />` : null}
+                <div className="text-right hidden sm:block">
+                  <div className="text-sm font-medium">${user?.name || ''}</div>
+                  <div className="muted text-xs">${user?.email || ''}</div>
+                </div>
+                <a href="/logout" className="ml-1 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-200 border border-rose-500/20 transition">
+                  <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M10 17v-4H3v-2h7V7l5 5l-5 5Zm-6 4V3h8v2H6v14h6v2Z"/></svg>
+                  <span className="text-sm">Logout</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      };
+
+      const ElectionCard = ({e}) => {
+        const fmt = t => window.dayjs ? dayjs(t).local().format('DD MMM YYYY, HH:mm') : new Date(t).toLocaleString();
+        return html`
+          <${Card} className="p-5 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="font-semibold text-lg">${e.title}</h3>
+              <div className="flex items-center gap-2">
+                <${Badge} tone=${e.status==='active'?'success':e.status==='closed'?'danger':'warning'}>${e.status?.toUpperCase()}</${Badge}>
+                ${e.is_frozen ? html`<${Badge} tone="warning">FROZEN</${Badge}>` : null}
+              </div>
+            </div>
+            <p className="muted text-sm leading-relaxed">${e.description || 'No description provided.'}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+              <div className="rounded-xl chip px-3 py-2">
+                <div className="muted text-xs">Starts</div><div className="font-medium">${fmt(e.start
+
 """
 
 VOTING_PAGE = """<!DOCTYPE html>
