@@ -46,7 +46,8 @@ ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "student.monash.edu")
 ADMIN_EMAILS = os.getenv("ADMIN_EMAILS", "admin@student.monash.edu").split(",")
 
 # ---------------- HTML templates ----------------
-LOGIN_TEMPLATE = """<!DOCTYPE html>
+LOGIN_TEMPLATE = """
+<!DOCTYPE html>
 <html>
 <head>
     <title>NilouVoter Login - Monash Voting System</title>
@@ -546,159 +547,249 @@ VOTING_DASHBOARD = """
   <title>NilouVoter — Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {50:'#eef9ff',100:'#d9f1ff',200:'#b6e5ff',300:'#84d5ff',400:'#46bdff',500:'#1597f2',600:'#0c78c5',700:'#0b61a2',800:'#0e517f',900:'#0f4368'}
+          }
+        }
+      }
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    html,body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    :root { --bg:#f7f8fb; --text:#0f172a; --muted:#334155; --card:#ffffff; --ring:rgba(2,6,23,.08); --subtle:rgba(15,23,42,.04); }
-    .dark { --bg:#0b1020; --text:#e6e7ec; --muted:#cdd3e0; --card:rgba(255,255,255,.05); --ring:rgba(255,255,255,.12); --subtle:rgba(255,255,255,.04); }
-    body{background:var(--bg); color:var(--text)}
-    .card{background:var(--card); box-shadow:0 1px 0 var(--ring) inset, 0 6px 18px rgba(2,6,23,.06); border:1px solid var(--ring)}
-    .chip{background:var(--subtle); border:1px solid var(--ring); color:var(--muted)}
-    .muted{color:var(--muted)}
-    .lynette-gradient{background-image:linear-gradient(135deg,#a78bfa,#22d3ee)}
-    .lynette-acc{background-color:#a78bfa1a; border-color:#a78bfa40; color:#6d28d9}
-    .lynette-bg:before{content:""; position:fixed; right:-40px; bottom:-20px; width:360px; height:360px; background:url('https://static.icy-veins.com/images/genshin-impact/characters/lynette.webp') no-repeat center/cover; opacity:.08; filter:saturate(120%); pointer-events:none; z-index:0}
-    .header-blur{backdrop-filter:saturate(120%) blur(8px)}
-    /* error overlay */
-    #nv-error{position:fixed;left:12px;bottom:12px;z-index:50;max-width:90%;display:none}
-    #nv-error .box{background:#fee2e2;color:#7f1d1d;border:1px solid #fecaca;border-radius:12px;padding:12px 14px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;white-space:pre-wrap}
-  </style>
+  <style>html,body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1020;color:#e6e7ec}</style>
 
-  <!-- Libs (React + HTM) -->
+  <!-- Libs -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
-  <!-- Dayjs is optional; we guard usage below -->
   <script src="https://unpkg.com/dayjs@1/dayjs.min.js"></script>
+  <script src="https://unpkg.com/dayjs@1/plugin/relativeTime.js"></script>
   <script src="https://unpkg.com/dayjs@1/plugin/utc.js"></script>
   <script src="https://unpkg.com/dayjs@1/plugin/timezone.js"></script>
-  <script src="https://unpkg.com/dayjs@1/plugin/relativeTime.js"></script>
+  <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
 </head>
 <body class="min-h-screen">
   <div id="root"></div>
-  <div id="nv-error"><div class="box"></div></div>
 
   <script>
-    // server data
+    // Server-provided data
     window.__APP__ = {
       user: {{ user_info | tojson }},
       isAdmin: {{ 'true' if is_admin else 'false' }},
       apiUrl: {{ api_url | tojson }},
       apiToken: {{ (api_token or '') | tojson }}
     };
-
-    // error overlay helper
-    function showErr(msg){
-      const el = document.getElementById('nv-error');
-      el.style.display='block';
-      el.querySelector('.box').textContent = msg;
-      console.error('[NilouVoter]', msg);
-    }
-    window.addEventListener('error', e => showErr(String(e.error || e.message || e)));
-    window.addEventListener('unhandledrejection', e => showErr(String(e.reason || e)));
   </script>
 
+  <!-- IMPORTANT: plain JS, not Babel -->
   <script type="text/javascript">
-    try {
-      const { useEffect, useMemo, useState } = React;
-      const html = htm.bind(React.createElement);
+    const { useEffect, useMemo, useRef, useState } = React;
+    dayjs.extend(dayjs_plugin_relativeTime);
+    dayjs.extend(dayjs_plugin_utc);
+    dayjs.extend(dayjs_plugin_timezone);
+    const html = htm.bind(React.createElement);
 
-      // guard dayjs plugins so missing CDN doesn't break render
-      if (window.dayjs) {
-        try { if (window.dayjs_plugin_utc) dayjs.extend(dayjs_plugin_utc); } catch {}
-        try { if (window.dayjs_plugin_timezone) dayjs.extend(dayjs_plugin_timezone); } catch {}
-        try { if (window.dayjs_plugin_relativeTime) dayjs.extend(dayjs_plugin_relativeTime); } catch {}
-      }
-
-      const getTheme = () => localStorage.getItem('nv-theme') || 'light';
-      const setTheme = t => localStorage.setItem('nv-theme', t);
-      const getLyn = () => localStorage.getItem('nv-lynette') === 'on';
-      const setLyn = v => localStorage.setItem('nv-lynette', v ? 'on' : 'off');
-
-      const Badge = ({ tone="info", children }) => {
-        const tones = {
-          info: "bg-blue-500/10 text-blue-700 dark:text-blue-200 ring-1 ring-blue-500/20",
-          success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-200 ring-1 ring-emerald-500/20",
-          danger: "bg-rose-500/10 text-rose-700 dark:text-rose-200 ring-1 ring-rose-500/20",
-          warning: "bg-amber-500/10 text-amber-700 dark:text-amber-200 ring-1 ring-amber-500/20",
-          admin: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-200 ring-1 ring-fuchsia-500/20",
-        };
-        return html`<span className={"px-2.5 py-1 rounded-full text-xs font-medium ${tones[tone]} select-none"}>${children}</span>`;
+    const Badge = ({ tone="info", children }) => {
+      const tones = {
+        info: "bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/20",
+        success: "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20",
+        danger: "bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20",
+        warning: "bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/20",
+        admin: "bg-fuchsia-500/15 text-fuchsia-300 ring-1 ring-fuchsia-400/20",
       };
+      return html`<span className={"px-2.5 py-1 rounded-full text-xs font-medium ${tones[tone]} select-none"}>${children}</span>`;
+    };
 
-      const Card = ({className="", children}) => html`<div className={"card rounded-2xl ${className}"}>${children}</div>`;
+    const Card = ({className="", children}) =>
+      html`<div className={"rounded-2xl bg-white/5 ring-1 ring-white/10 shadow-xl shadow-black/30 ${className}"}>${children}</div>`;
 
-      const Toggle = ({checked, onClick, label}) => html`
-        <button onClick=${onClick} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl chip hover:bg-black/5 dark:hover:bg-white/10 transition">
-          <span className="text-sm">${label}${checked ? ' ✓':''}</span>
-        </button>
-      `;
+    const Header = ({user, isAdmin}) => html`
+      <div className="sticky top-0 z-20 backdrop-blur-xl bg-[#0b1020]/60 border-b border-white/10">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-fuchsia-400 grid place-items-center ring-1 ring-white/20">
+            <svg width="22" height="22" viewBox="0 0 24 24" className="text-white/90"><path fill="currentColor" d="M12 1.5 7.5 9 0 10.2l5.5 5.2L4.2 23 12 19.2 19.8 23l-1.3-7.6L24 10.2 16.5 9 12 1.5z"/></svg>
+          </div>
+          <div className="flex-1">
+            <div className="text-white/90 font-semibold text-lg leading-tight">NilouVoter</div>
+            <div className="text-white/50 text-xs -mt-0.5">Monash Student Council Electronic Voting</div>
+          </div>
+          <div className="flex items-center gap-3">
+            ${isAdmin ? html`<${Badge} tone="admin">ADMIN</${Badge}>` : null}
+            ${user?.picture ? html`<img src=${user.picture} className="w-9 h-9 rounded-full ring-2 ring-white/20" alt="pfp" />` : null}
+            <div className="text-right hidden sm:block">
+              <div className="text-white/90 text-sm font-medium">${user?.name || ''}</div>
+              <div className="text-white/50 text-xs">${user?.email || ''}</div>
+            </div>
+            <a href="/logout" className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 ring-1 ring-rose-400/30 transition">
+              <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M10 17v-4H3v-2h7V7l5 5l-5 5Zm-6 4V3h8v2H6v14h6v2Z"/></svg>
+              <span className="text-sm">Logout</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
 
-      const Header = ({user, isAdmin, theme, setThemeState, lynette, setLynette}) => {
-        useEffect(()=>{
-          document.documentElement.classList.toggle('dark', theme === 'dark');
-          document.body.classList.toggle('lynette-bg', lynette);
-        }, [theme, lynette]);
+    const SkeletonCard = () => html`
+      <${Card} className="p-5 animate-pulse space-y-3">
+        <div className="h-4 w-2/3 bg-white/10 rounded"></div>
+        <div className="h-3 w-1/2 bg-white/10 rounded"></div>
+        <div className="h-3 w-1/3 bg-white/10 rounded"></div>
+        <div className="flex gap-2 pt-2">
+          <div className="h-8 w-24 bg-white/10 rounded-lg"></div>
+          <div className="h-8 w-24 bg-white/10 rounded-lg"></div>
+        </div>
+      </${Card}>
+    `;
 
-        return html`
-          <div className="sticky top-0 z-20 header-blur border-b" style="background:rgba(255,255,255,.7);border-color:var(--ring)">
-            <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl overflow-hidden" style="border:1px solid var(--ring)">
-                <img src="https://static.icy-veins.com/images/genshin-impact/characters/lynette.webp" alt="Lynette" className="w-full h-full object-cover"/>
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold text-lg leading-tight">NilouVoter</div>
-                <div className="muted text-xs -mt-0.5">Monash Student Council Electronic Voting</div>
-              </div>
+    const StatusBadge = ({status, frozen}) => {
+      const tone = status === 'active' ? 'success' : status === 'closed' ? 'danger' : 'warning';
+      return html`<div className="flex items-center gap-2">
+        <${Badge} tone=${tone}>${status?.toUpperCase()}</${Badge}>
+        ${frozen ? html`<${Badge} tone="warning">FROZEN</${Badge}>` : null}
+      </div>`;
+    };
 
-              ${lynette ? html`<${Badge} tone="admin">LYNETTE MODE</${Badge}>` : null}
-              ${isAdmin ? html`<${Badge} tone="admin">ADMIN</${Badge}>` : null}
-
-              <div className="flex items-center gap-2 ml-2">
-                <${Toggle}
-                  checked=${theme==='dark'}
-                  onClick=${() => { const t = theme==='dark' ? 'light' : 'dark'; setTheme(t); setThemeState(t); }}
-                  label="Theme"
-                />
-                <${Toggle}
-                  checked=${lynette}
-                  onClick=${() => { const v = !lynette; setLyn(v); setLynette(v); }}
-                  label="Lynette mode"
-                />
-              </div>
-
-              <div className="flex items-center gap-3 pl-2">
-                ${user?.picture ? html`<img src=${user.picture} className="w-9 h-9 rounded-full" style="border:1px solid var(--ring)" alt="pfp" />` : null}
-                <div className="text-right hidden sm:block">
-                  <div className="text-sm font-medium">${user?.name || ''}</div>
-                  <div className="muted text-xs">${user?.email || ''}</div>
-                </div>
-                <a href="/logout" className="ml-1 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-200 border border-rose-500/20 transition">
-                  <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M10 17v-4H3v-2h7V7l5 5l-5 5Zm-6 4V3h8v2H6v14h6v2Z"/></svg>
-                  <span className="text-sm">Logout</span>
-                </a>
-              </div>
+    const ElectionCard = ({e, apiUrl}) => {
+      const start = dayjs(e.start_time);
+      const end = dayjs(e.end_time);
+      return html`
+        <${Card} className="p-5 flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-white font-semibold text-lg">${e.title}</h3>
+            <${StatusBadge} status=${e.status} frozen=${e.is_frozen} />
+          </div>
+          <p className="text-white/70 text-sm leading-relaxed">${e.description || 'No description provided.'}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-white/70">
+            <div className="rounded-xl bg-white/5 ring-1 ring-white/10 p-3">
+              <div className="text-white/50 text-xs">Starts</div>
+              <div className="font-medium">${start.local().format('DD MMM YYYY, HH:mm')}</div>
+            </div>
+            <div className="rounded-xl bg-white/5 ring-1 ring-white/10 p-3">
+              <div className="text-white/50 text-xs">Ends</div>
+              <div className="font-medium">${end.local().format('DD MMM YYYY, HH:mm')}</div>
             </div>
           </div>
-        `;
+          <div className="flex flex-wrap gap-2 pt-2">
+            ${e.status === 'active' && !e.is_frozen
+              ? html`<a href=${"/vote/" + e.id} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-500/20 hover:bg-brand-500/30 text-sky-200 ring-1 ring-sky-400/30 transition">
+                       <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M13 3v8h8v2h-8v8h-2v-8H3V11h8V3z"/></svg>
+                       Vote Now
+                     </a>`
+              : e.status === 'closed'
+              ? html`<a href=${"/results/" + e.id} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white ring-1 ring-white/20 transition">
+                       <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M5 9h3v12H5zm6-6h3v18h-3zM17 13h3v8h-3z"/></svg>
+                       View Results
+                     </a>`
+              : html`<span className="text-white/50 text-sm">Voting not available</span>`
+            }
+          </div>
+        </${Card}>
+      `;
+    };
+
+    const AdminPanel = () => html`
+      <${Card} className="p-4 border border-fuchsia-400/20 bg-fuchsia-500/5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" className="text-fuchsia-300"><path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12c5.16-1.26 9-6.45 9-12V5l-9-4Zm-1 6h2v6h-2Zm0 8h2v2h-2Z"/></svg>
+            <div className="text-fuchsia-200 font-semibold">Admin Panel</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a href="/admin/create-election" className="px-3 py-2 rounded-xl bg-brand-500/20 hover:bg-brand-500/30 text-sky-200 ring-1 ring-sky-400/30 transition">Create Election</a>
+            <a href="/admin/audit-logs" className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white ring-1 ring-white/20 transition">Audit Logs</a>
+            <a href="/admin/templates" className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white ring-1 ring-white/20 transition">Templates</a>
+          </div>
+        </div>
+      </${Card}>
+    `;
+
+    const Filters = ({query, setQuery, status, setStatus}) => html`
+      <div className="flex flex-col sm:flex-row gap-3">
+        <input
+          value=${query}
+          onChange=${e => setQuery(e.target.value)}
+          placeholder="Search elections…"
+          className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 ring-1 ring-white/10 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+        />
+        <select
+          value=${status}
+          onChange=${e => setStatus(e.target.value)}
+          className="px-4 py-2.5 rounded-xl bg-white/5 ring-1 ring-white/10 text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+    `;
+
+    const Dashboard = () => {
+      const { user, isAdmin, apiUrl } = window.__APP__;
+      const [loading, setLoading] = useState(true);
+      const [elections, setElections] = useState([]);
+      const [query, setQuery] = useState("");
+      const [status, setStatus] = useState("");
+      const [error, setError] = useState("");
+
+      const load = async () => {
+        try {
+          setError("");
+          const res = await fetch(`${apiUrl}/api/elections`, { cache: "no-store" });
+          const data = await res.json();
+          setElections(Array.isArray(data) ? data : []);
+        } catch (e) {
+          setError("Failed to load elections. Please try again later.");
+        } finally {
+          setLoading(false);
+        }
       };
 
-      const ElectionCard = ({e}) => {
-        const fmt = t => window.dayjs ? dayjs(t).local().format('DD MMM YYYY, HH:mm') : new Date(t).toLocaleString();
-        return html`
-          <${Card} className="p-5 flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="font-semibold text-lg">${e.title}</h3>
-              <div className="flex items-center gap-2">
-                <${Badge} tone=${e.status==='active'?'success':e.status==='closed'?'danger':'warning'}>${e.status?.toUpperCase()}</${Badge}>
-                ${e.is_frozen ? html`<${Badge} tone="warning">FROZEN</${Badge}>` : null}
-              </div>
-            </div>
-            <p className="muted text-sm leading-relaxed">${e.description || 'No description provided.'}</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              <div className="rounded-xl chip px-3 py-2">
-                <div className="muted text-xs">Starts</div><div className="font-medium">${fmt(e.start
+      React.useEffect(() => {
+        load();
+        const id = setInterval(load, 30000);
+        return () => clearInterval(id);
+      }, []);
+
+      const filtered = React.useMemo(() => {
+        return elections.filter(e => {
+          const okQ = !query || (e.title?.toLowerCase().includes(query.toLowerCase()) || e.description?.toLowerCase().includes(query.toLowerCase()));
+          const okS = !status || e.status === status;
+          return okQ && okS;
+        });
+      }, [elections, query, status]);
+
+      return html`
+        <${Header} user=${user} isAdmin=${isAdmin} />
+        <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+          ${isAdmin ? html`<${AdminPanel} />` : null}
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Available Elections</h2>
+            <span className="text-white/60 text-sm">${elections.length} total</span>
+          </div>
+          <${Filters} query=${query} setQuery=${setQuery} status=${status} setStatus=${setStatus} />
+          ${error ? html`<div className="p-4 rounded-xl bg-rose-500/10 ring-1 ring-rose-400/20 text-rose-200">${error}</div>` : null}
+          ${loading
+            ? html`<div className="grid md:grid-cols-2 gap-4"><${SkeletonCard}/><${SkeletonCard}/><${SkeletonCard}/></div>`
+            : filtered.length === 0
+              ? html`<${Card} className="p-6 text-white/70">No elections match your filters.</${Card}>`
+              : html`
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  ${filtered.map(e => html`<${ElectionCard} key=${e.id} e=${e} apiUrl=${apiUrl} />`)}
+                </div>
+              `
+          }
+        </main>
+      `;
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(html`<${Dashboard} />`);
+  </script>
+</body>
+</html>
 
 """
 
