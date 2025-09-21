@@ -50,31 +50,490 @@ LOGIN_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
     <title>NilouVoter Login - Monash Voting System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
-        .login-btn { background-color: #4285f4; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; margin: 20px 0; }
-        .login-btn:hover { background-color: #357ae8; }
-        .error { color: #d93025; background-color: #fce8e6; border: 1px solid #d93025; border-radius: 4px; padding: 10px; margin: 20px 0; }
-        .restriction-notice { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; border-radius: 4px; padding: 15px; margin: 20px 0; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            min-height: 100vh;
+            background: #0f172a;
+            color: white;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        /* Animated background */
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+        
+        .aura-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: conic-gradient(from 0deg at 20% 10%, #0ea5e9 0deg, #4338ca 120deg, #a21caf 240deg, #0ea5e9 360deg);
+            opacity: 0.4;
+            animation: spin-slow 40s linear infinite;
+        }
+        
+        @keyframes spin-slow {
+            to { transform: rotate(360deg); }
+        }
+        
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6));
+        }
+        
+        .floating-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(40px);
+            opacity: 0.7;
+            mix-blend-mode: screen;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .orb-1 {
+            width: 360px;
+            height: 360px;
+            background: linear-gradient(135deg, #38bdf8, #6366f1);
+            top: -120px;
+            left: -220px;
+            animation-delay: 0.2s;
+        }
+        
+        .orb-2 {
+            width: 420px;
+            height: 420px;
+            background: linear-gradient(135deg, #d946ef, #f43f5e);
+            top: 60px;
+            right: -220px;
+            animation-delay: 0.4s;
+        }
+        
+        .orb-3 {
+            width: 260px;
+            height: 260px;
+            background: linear-gradient(135deg, #2dd4bf, #10b981);
+            bottom: -120px;
+            left: -80px;
+            animation-delay: 0.6s;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-20px) scale(1.05); }
+        }
+        
+        .grid-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.3;
+        }
+        
+        .spotlight {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(300px 300px at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.08), transparent 60%);
+            pointer-events: none;
+        }
+        
+        /* Main content */
+        .container {
+            position: relative;
+            z-index: 10;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .header-text {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: slideUp 0.8s ease-out;
+        }
+        
+        .secure-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 2rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 1rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .secure-indicator {
+            width: 6px;
+            height: 6px;
+            background: #38bdf8;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .main-title {
+            font-size: 3rem;
+            font-weight: 600;
+            line-height: 1.1;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #38bdf8, #d946ef);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 1.125rem;
+            color: rgba(255,255,255,0.7);
+            max-width: 32rem;
+            line-height: 1.6;
+        }
+        
+        .glass-card {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 80px rgba(0,0,0,0.4);
+            width: 100%;
+            max-width: 28rem;
+            animation: slideUp 0.8s ease-out 0.2s both;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .brand-lockup {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .brand-icon {
+            width: 3rem;
+            height: 3rem;
+            background: rgba(255,255,255,0.15);
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .brand-text h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+        
+        .brand-text p {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.875rem;
+        }
+        
+        .google-btn {
+            width: 100%;
+            background: white;
+            color: #1f2937;
+            border: none;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .google-btn:hover {
+            background: rgba(255,255,255,0.9);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        
+        .google-btn:active {
+            transform: translateY(0);
+        }
+        
+        .google-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.6), rgba(255,255,255,0.1));
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            border-radius: 0.75rem;
+        }
+        
+        .google-btn:hover::before {
+            opacity: 1;
+        }
+        
+        .google-icon {
+            width: 1.5rem;
+            height: 1.5rem;
+            z-index: 1;
+            position: relative;
+        }
+        
+        .restriction-notice {
+            background: rgba(255, 243, 205, 0.1);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .restriction-notice strong {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 1.125rem;
+        }
+        
+        .nilou-gif {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.75rem;
+            margin: 1rem auto;
+            display: block;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .error {
+            color: #fca5a5;
+            background: rgba(252, 165, 165, 0.1);
+            border: 1px solid rgba(252, 165, 165, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            backdrop-filter: blur(10px);
+        }
+        
+        .footer-info {
+            margin-top: 2rem;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            text-align: center;
+            line-height: 1.6;
+        }
+        
+        .footer-links {
+            margin-top: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: rgba(255,255,255,0.7);
+        }
+        
+        .footer-links a {
+            color: inherit;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        
+        .footer-links a:hover {
+            color: rgba(255,255,255,0.95);
+        }
+        
+        .footer-links .separator {
+            opacity: 0.3;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .main-title {
+                font-size: 2rem;
+            }
+            
+            .glass-card {
+                padding: 1.5rem;
+            }
+            
+            .brand-lockup {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.5rem;
+            }
+        }
+        
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>NilouVoter Login</h1>
-    <p>Sign in with your Monash student Google account</p>
-    <div class="restriction-notice">
-        <strong>⚠️ Welcome to NilouVoter</strong><br>
-        Only works with <strong>@student.monash.edu</strong> emails.
-        <br><br>
-        <img src="https://media.tenor.com/v96jmNd3sr8AAAAd/nilou-genshin-impact.gif" alt="Nilou Dance" style="display: block; margin: 15px auto; max-width: 100%; height: auto;">
+    <div class="background">
+        <div class="aura-bg"></div>
+        <div class="vignette"></div>
+        <div class="floating-orb orb-1"></div>
+        <div class="floating-orb orb-2"></div>
+        <div class="floating-orb orb-3"></div>
+        <div class="grid-pattern"></div>
+        <div class="spotlight" id="spotlight"></div>
     </div>
-    {% if error %}
-    <div class="error"><strong>Error:</strong> {{ error }}</div>
-    {% endif %}
-    <a href="{{ auth_url }}" class="login-btn">Sign in with Monash Student Account</a>
-    <div style="margin-top: 40px; font-size: 12px; color: #666;">
-        <p>This application will access your basic profile information (name, email, profile picture)</p>
-        <p>Please use your @student.monash.edu email address</p>
-    </div>
+    
+    <main class="container">
+        <div class="header-text">
+            <div class="secure-badge">
+                <div class="secure-indicator"></div>
+                Secure Access Portal
+            </div>
+            <h2 class="main-title">Welcome to NilouVoter</h2>
+            <p class="subtitle">
+                Sign in with your Monash student account to access the electronic voting system
+            </p>
+        </div>
+        
+        <div class="glass-card">
+            <div class="brand-lockup">
+                <div class="brand-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 12l2 2 4-4"/>
+                        <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
+                        <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
+                        <path d="M12 3c0 1-1 3-3 3s-3-2-3-3 1-3 3-3 3 2 3 3"/>
+                        <path d="M12 21c0-1-1-3-3-3s-3 2-3 3 1 3 3 3 3-2 3-3"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>Monash University</h1>
+                    <p>Student Voting Portal</p>
+                </div>
+            </div>
+            
+            <div class="restriction-notice">
+                <strong>Welcome to NilouVoter</strong>
+                Only works with <strong>@student.monash.edu</strong> emails.
+                <img src="https://media.tenor.com/v96jmNd3sr8AAAAd/nilou-genshin-impact.gif" 
+                     alt="Nilou Dance" class="nilou-gif">
+            </div>
+            
+            {% if error %}
+            <div class="error">
+                <strong>Error:</strong> {{ error }}
+            </div>
+            {% endif %}
+            
+            <a href="{{ auth_url }}" class="google-btn">
+                <svg class="google-icon" viewBox="0 0 48 48" aria-hidden="true">
+                    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.6 29.3 36 24 36 16.8 36 11 30.2 11 23S16.8 10 24 10c3.6 0 6.8 1.5 9 3.9l5.7-5.7C35.5 4.1 30.1 2 24 2 12 2 2 12 2 24s10 22 22 22c11.2 0 21-8.1 21-22 0-1.2-.1-2.2-.4-3.5z"/>
+                    <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16.5 18.9 14 24 14c3.6 0 6.8 1.5 9 3.9l5.7-5.7C35.5 4.1 30.1 2 24 2 15.4 2 8 6.8 4.2 14.1l2.1.6z"/>
+                    <path fill="#4CAF50" d="M24 46c5.2 0 10-2 13.6-5.3l-6.3-5.2C29.1 37.7 26.7 38.6 24 38.6 18.8 38.6 14.3 35 12.7 30l-6.5 5C10 41.5 16.6 46 24 46z"/>
+                    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.4-4.1 6.2-7.7 7.1l6.3 5.2C37.1 37.6 40 31.7 40 24c0-1.2-.1-2.2-.4-3.5z"/>
+                </svg>
+                Sign in with Monash Student Account
+            </a>
+            
+            <div class="footer-info">
+                This application will access your basic profile information<br>
+                (name, email, profile picture)
+            </div>
+            
+            <div class="footer-links">
+                <a href="#">Privacy</a>
+                <span class="separator">•</span>
+                <a href="#">Terms</a>
+                <span class="separator">•</span>
+                <a href="#">Help</a>
+            </div>
+        </div>
+    </main>
+    
+    <script>
+        // Mouse tracking for spotlight effect
+        document.addEventListener('mousemove', (e) => {
+            const spotlight = document.getElementById('spotlight');
+            const rect = document.body.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            spotlight.style.setProperty('--mx', x + '%');
+            spotlight.style.setProperty('--my', y + '%');
+        });
+        
+        // Subtle parallax effect on scroll
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            const orbs = document.querySelectorAll('.floating-orb');
+            orbs.forEach((orb, index) => {
+                const speed = 0.5 + (index * 0.1);
+                orb.style.transform = `translateY(${scrolled * speed}px)`;
+            });
+        });
+    </script>
 </body>
 </html>
 """
