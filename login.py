@@ -793,101 +793,1829 @@ VOTING_DASHBOARD = """
 
 """
 
+ADMIN_DASHBOARD = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NilouVoter Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {50:'#eef9ff',100:'#d9f1ff',200:'#b6e5ff',300:'#84d5ff',400:'#46bdff',500:'#1597f2',600:'#0c78c5',700:'#0b61a2',800:'#0e517f',900:'#0f4368'}
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.2s ease-out',
+            'slide-up': 'slideUp 0.3s ease-out',
+            'pulse-slow': 'pulse 3s infinite',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' },
+            },
+            slideUp: {
+              '0%': { opacity: '0', transform: 'translateY(20px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            }
+          },
+          backdropBlur: {
+            'xs': '2px',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html,body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1020;color:#e6e7ec}
+    .modal-backdrop { backdrop-filter: blur(8px); }
+    .glassmorphism { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+    .candidate-drag { transition: all 0.2s ease; }
+    .candidate-drag:hover { transform: translateY(-2px); }
+  </style>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/dayjs@1/dayjs.min.js"></script>
+  <script src="https://unpkg.com/dayjs@1/plugin/relativeTime.js"></script>
+  <script src="https://unpkg.com/dayjs@1/plugin/utc.js"></script>
+  <script src="https://unpkg.com/dayjs@1/plugin/timezone.js"></script>
+  <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+</head>
+<body class="min-h-screen">
+  <div id="root"></div>
+  <script>
+    window.__APP__ = {
+      user: {{ user_info | tojson }},
+      isAdmin: {{ 'true' if is_admin else 'false' }},
+      apiUrl: {{ api_url | tojson }},
+      apiToken: {{ (api_token or '') | tojson }}
+    };
+  </script>
+  <script type="text/javascript">
+    const { useEffect, useMemo, useRef, useState, useCallback } = React;
+    dayjs.extend(dayjs_plugin_relativeTime);
+    dayjs.extend(dayjs_plugin_utc);
+    dayjs.extend(dayjs_plugin_timezone);
+    const html = htm.bind(React.createElement);
+
+    const Badge = ({ tone="info", children, className="" }) => {
+      const tones = {
+        info: "bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/20",
+        success: "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20",
+        danger: "bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20",
+        warning: "bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/20",
+        admin: "bg-fuchsia-500/15 text-fuchsia-300 ring-1 ring-fuchsia-400/20",
+      };
+      return html`<span className=${`px-2.5 py-1 rounded-full text-xs font-medium ${tones[tone]} select-none ${className}`}>${children}</span>`;
+    };
+
+    const Card = ({className="", children, onClick}) =>
+      html`<div onClick=${onClick} className=${`rounded-2xl bg-white/5 ring-1 ring-white/10 shadow-xl shadow-black/30 ${className} ${onClick ? 'cursor-pointer hover:bg-white/10 transition-colors' : ''}`}>${children}</div>`;
+
+    const Button = ({ variant="primary", size="md", disabled=false, loading=false, children, onClick, className="" }) => {
+      const variants = {
+        primary: "bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white shadow-lg shadow-brand-500/25",
+        secondary: "bg-white/10 hover:bg-white/15 text-white ring-1 ring-white/20",
+        danger: "bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white shadow-lg shadow-rose-500/25",
+        ghost: "hover:bg-white/10 text-white/70 hover:text-white"
+      };
+      const sizes = {
+        sm: "px-3 py-1.5 text-sm",
+        md: "px-4 py-2 text-sm",
+        lg: "px-6 py-3 text-base"
+      };
+      
+      return html`
+        <button 
+          onClick=${onClick}
+          disabled=${disabled || loading}
+          className=${`inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+        >
+          ${loading ? html`<div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>` : null}
+          ${children}
+        </button>
+      `;
+    };
+
+    const Header = ({user, onCreateElection, onViewAuditLogs, onManageTemplates}) => html`
+      <div className="sticky top-0 z-30 backdrop-blur-xl bg-[#0b1020]/80 border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-fuchsia-400 grid place-items-center ring-1 ring-white/20">
+                <svg width="22" height="22" viewBox="0 0 24 24" className="text-white/90">
+                  <path fill="currentColor" d="M12 1.5 7.5 9 0 10.2l5.5 5.2L4.2 23 12 19.2 19.8 23l-1.3-7.6L24 10.2 16.5 9 12 1.5z"/>
+                </svg>
+              </div>
+              <div>
+                <div className="text-white/90 font-semibold text-lg leading-tight">NilouVoter Admin</div>
+                <div className="text-white/50 text-xs -mt-0.5">Election Management Dashboard</div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <${Button} variant="primary" onClick=${onCreateElection} className="hidden sm:flex">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Create Election
+              </${Button}>
+              
+              <div className="hidden md:flex items-center gap-2">
+                <${Button} variant="ghost" size="sm" onClick=${onViewAuditLogs}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14,2 14,8 20,8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10,9 9,9 8,9"/>
+                  </svg>
+                  Audit Logs
+                </${Button}>
+                <${Button} variant="ghost" size="sm" onClick=${onManageTemplates}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <rect x="7" y="7" width="3" height="9"/>
+                    <rect x="14" y="7" width="3" height="5"/>
+                  </svg>
+                  Templates
+                </${Button}>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <${Badge} tone="admin">ADMIN</${Badge}>
+                ${user?.picture ? html`<img src=${user.picture} className="w-9 h-9 rounded-full ring-2 ring-white/20" alt="pfp" />` : null}
+                <div className="text-right hidden sm:block">
+                  <div className="text-white/90 text-sm font-medium">${user?.name || ''}</div>
+                  <div className="text-white/50 text-xs">${user?.email || ''}</div>
+                </div>
+                <a href="/logout" className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 ring-1 ring-rose-400/30 transition">
+                  <svg width="16" height="16" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M10 17v-4H3v-2h7V7l5 5l-5 5Zm-6 4V3h8v2H6v14h6v2Z"/>
+                  </svg>
+                  <span className="text-sm">Logout</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const Modal = ({ isOpen, onClose, title, children, size="lg" }) => {
+      const sizeClasses = {
+        sm: "max-w-md",
+        md: "max-w-lg", 
+        lg: "max-w-2xl",
+        xl: "max-w-4xl",
+        full: "max-w-6xl"
+      };
+
+      useEffect(() => {
+        if (isOpen) {
+          document.body.style.overflow = 'hidden';
+        } else {
+          document.body.style.overflow = 'unset';
+        }
+        return () => { document.body.style.overflow = 'unset'; };
+      }, [isOpen]);
+
+      if (!isOpen) return null;
+
+      return html`
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 modal-backdrop animate-fade-in" onClick=${onClose}></div>
+          <div className=${`relative w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden`}>
+            <div className="glassmorphism rounded-2xl shadow-2xl animate-slide-up">
+              <div className="flex items-center justify-between p-6 border-b border-white/10">
+                <h2 className="text-xl font-semibold text-white">${title}</h2>
+                <button onClick=${onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              <div className="p-6 max-h-[70vh] overflow-y-auto">
+                ${children}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    const CreateElectionModal = ({ isOpen, onClose, onSuccess, apiUrl }) => {
+      const [step, setStep] = useState(1);
+      const [loading, setLoading] = useState(false);
+      const [formData, setFormData] = useState({
+        title: '',
+        description: '',
+        start_time: '',
+        end_time: '',
+        template_id: null
+      });
+      const [candidates, setCandidates] = useState([]);
+      const [templates, setTemplates] = useState([]);
+
+      const resetForm = () => {
+        setStep(1);
+        setFormData({
+          title: '',
+          description: '',
+          start_time: '',
+          end_time: '',
+          template_id: null
+        });
+        setCandidates([]);
+      };
+
+      useEffect(() => {
+        if (isOpen) {
+          loadTemplates();
+          resetForm();
+        }
+      }, [isOpen]);
+
+      const loadTemplates = async () => {
+        try {
+          const response = await fetch(`${apiUrl}/api/templates`);
+          const data = await response.json();
+          setTemplates(Array.isArray(data) ? data : []);
+        } catch (error) {
+          console.error('Failed to load templates:', error);
+        }
+      };
+
+      const handleInputChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+      };
+
+      const addCandidate = () => {
+        setCandidates(prev => [...prev, { name: '', faculty: '', manifesto: '', external_id: '' }]);
+      };
+
+      const removeCandidate = (index) => {
+        setCandidates(prev => prev.filter((_, i) => i !== index));
+      };
+
+      const updateCandidate = (index, field, value) => {
+        setCandidates(prev => prev.map((candidate, i) => 
+          i === index ? { ...candidate, [field]: value } : candidate
+        ));
+      };
+
+      const handleBulkImport = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            if (file.type === 'application/json') {
+              const data = JSON.parse(e.target.result);
+              if (data.candidates && Array.isArray(data.candidates)) {
+                setCandidates(data.candidates);
+              }
+            } else if (file.name.endsWith('.csv')) {
+              const lines = e.target.result.split('\\n');
+              const headers = lines[0].split(',').map(h => h.trim());
+              const candidates = lines.slice(1)
+                .filter(line => line.trim())
+                .map(line => {
+                  const values = line.split(',').map(v => v.trim());
+                  const candidate = {};
+                  headers.forEach((header, i) => {
+                    candidate[header] = values[i] || '';
+                  });
+                  return candidate;
+                });
+              setCandidates(candidates);
+            }
+          } catch (error) {
+            alert('Failed to parse file. Please check the format.');
+          }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+      };
+
+      const validateStep1 = () => {
+        return formData.title && formData.start_time && formData.end_time;
+      };
+
+      const validateStep2 = () => {
+        return candidates.length > 0 && candidates.every(c => c.name.trim());
+      };
+
+      const createElection = async () => {
+        setLoading(true);
+        try {
+          // Create election
+          const electionData = {
+            title: formData.title,
+            description: formData.description,
+            start_time: new Date(formData.start_time).toISOString(),
+            end_time: new Date(formData.end_time).toISOString(),
+            ...(formData.template_id && { template_id: formData.template_id })
+          };
+
+          const electionResponse = await fetch(`${apiUrl}/api/elections`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(electionData)
+          });
+
+          if (!electionResponse.ok) {
+            throw new Error('Failed to create election');
+          }
+
+          const election = await electionResponse.json();
+          const electionId = election.election_id;
+
+          // Add candidates if any
+          if (candidates.length > 0) {
+            const candidatesData = {
+              candidates: candidates.map(c => ({
+                name: c.name,
+                faculty: c.faculty || '',
+                manifesto: c.manifesto || '',
+                ...(c.external_id && { external_id: c.external_id })
+              }))
+            };
+
+            const candidatesResponse = await fetch(`${apiUrl}/api/elections/${electionId}/candidates/bulk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(candidatesData)
+            });
+
+            if (!candidatesResponse.ok) {
+              console.warn('Failed to add candidates, but election was created');
+            }
+          }
+
+          onSuccess();
+          onClose();
+        } catch (error) {
+          alert(`Error: ${error.message}`);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const renderStep1 = () => html`
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-white/90 mb-2">Election Title *</label>
+              <input
+                type="text"
+                value=${formData.title}
+                onChange=${(e) => handleInputChange('title', e.target.value)}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50"
+                placeholder="e.g., Student Council President Election 2025"
+                required
+              />
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-white/90 mb-2">Description</label>
+              <textarea
+                value=${formData.description}
+                onChange=${(e) => handleInputChange('description', e.target.value)}
+                rows="3"
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50"
+                placeholder="Brief description of the election..."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-white/90 mb-2">Start Date & Time *</label>
+              <input
+                type="datetime-local"
+                value=${formData.start_time}
+                onChange=${(e) => handleInputChange('start_time', e.target.value)}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-white/90 mb-2">End Date & Time *</label>
+              <input
+                type="datetime-local"
+                value=${formData.end_time}
+                onChange=${(e) => handleInputChange('end_time', e.target.value)}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50"
+                required
+              />
+            </div>
+            
+            ${templates.length > 0 ? html`
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-white/90 mb-2">Use Template (Optional)</label>
+                <select
+                  value=${formData.template_id || ''}
+                  onChange=${(e) => handleInputChange('template_id', e.target.value || null)}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50"
+                >
+                  <option value="">No template</option>
+                  ${templates.map(template => html`
+                    <option key=${template.id} value=${template.id}>${template.name}</option>
+                  `)}
+                </select>
+              </div>
+            ` : null}
+          </div>
+          
+          <div className="flex justify-end gap-3">
+            <${Button} variant="secondary" onClick=${onClose}>Cancel</${Button}>
+            <${Button} variant="primary" onClick=${() => setStep(2)} disabled=${!validateStep1()}>
+              Next: Add Candidates
+            </${Button}>
+          </div>
+        </div>
+      `;
+
+      const renderStep2 = () => html`
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium text-white">Candidates</h3>
+            <div className="flex gap-2">
+              <input
+                type="file"
+                accept=".json,.csv"
+                onChange=${handleBulkImport}
+                className="hidden"
+                id="bulk-import"
+              />
+              <${Button} variant="secondary" size="sm" onClick=${() => document.getElementById('bulk-import').click()}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7,10 12,15 17,10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Import JSON/CSV
+              </${Button}>
+              <${Button} variant="ghost" size="sm" onClick=${addCandidate}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Add Candidate
+              </${Button}>
+            </div>
+          </div>
+          
+          ${candidates.length === 0 ? html`
+            <div className="text-center py-8 text-white/60">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-3 text-white/40">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <p>No candidates added yet</p>
+              <p className="text-sm">Click "Add Candidate" or import from JSON/CSV</p>
+            </div>
+          ` : html`
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              ${candidates.map((candidate, index) => html`
+                <div key=${index} className="candidate-drag glassmorphism p-4 rounded-xl">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-white/70 mb-1">Name *</label>
+                      <input
+                        type="text"
+                        value=${candidate.name}
+                        onChange=${(e) => updateCandidate(index, 'name', e.target.value)}
+                        className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                        placeholder="Candidate name"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-white/70 mb-1">Faculty</label>
+                      <input
+                        type="text"
+                        value=${candidate.faculty}
+                        onChange=${(e) => updateCandidate(index, 'faculty', e.target.value)}
+                        className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                        placeholder="e.g., Engineering"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-white/70">Manifesto</label>
+                        <button
+                          onClick=${() => removeCandidate(index)}
+                          className="text-rose-400 hover:text-rose-300 p-1"
+                          title="Remove candidate"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="3,6 5,6 21,6"/>
+                            <path d="m19,6v14a2,2 0,0 1,-2,2H7a2,2 0,0 1,-2,-2V6m3,0V4a2,2 0,0 1,2,-2h4a2,2 0,0 1,2,2v2"/>
+                          </svg>
+                        </button>
+                      </div>
+                      <textarea
+                        value=${candidate.manifesto}
+                        onChange=${(e) => updateCandidate(index, 'manifesto', e.target.value)}
+                        rows="2"
+                        className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                        placeholder="Campaign manifesto or key points..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              `)}
+            </div>
+          `}
+          
+          <div className="flex justify-between">
+            <${Button} variant="secondary" onClick=${() => setStep(1)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="m15 18-6-6 6-6"/>
+              </svg>
+              Back
+            </${Button}>
+            <${Button} variant="primary" onClick=${() => setStep(3)} disabled=${!validateStep2()}>
+              Next: Review
+            </${Button}>
+          </div>
+        </div>
+      `;
+
+      const renderStep3 = () => html`
+        <div className="space-y-6">
+          <h3 className="text-lg font-medium text-white">Review Election</h3>
+          
+          <div className="glassmorphism p-6 rounded-xl space-y-4">
+            <div>
+              <h4 className="font-medium text-white mb-2">${formData.title}</h4>
+              <p className="text-white/70 text-sm">${formData.description || 'No description'}</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-white/60">Start:</span>
+                <div className="text-white">${dayjs(formData.start_time).format('MMM DD, YYYY HH:mm')}</div>
+              </div>
+              <div>
+                <span className="text-white/60">End:</span>
+                <div className="text-white">${dayjs(formData.end_time).format('MMM DD, YYYY HH:mm')}</div>
+              </div>
+            </div>
+            
+            <div>
+              <span className="text-white/60">Candidates (${candidates.length}):</span>
+              <div className="mt-2 space-y-2">
+                ${candidates.map((candidate, index) => html`
+                  <div key=${index} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+                    <div className="w-8 h-8 rounded-full bg-brand-500/20 text-brand-200 flex items-center justify-center text-sm font-medium">
+                      ${index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-white text-sm font-medium">${candidate.name}</div>
+                      <div className="text-white/60 text-xs">${candidate.faculty || 'No faculty specified'}</div>
+                    </div>
+                  </div>
+                `)}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-between">
+            <${Button} variant="secondary" onClick=${() => setStep(2)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="m15 18-6-6 6-6"/>
+              </svg>
+              Back
+            </${Button}>
+            <${Button} variant="primary" onClick=${createElection} loading=${loading}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 6 9 17l-5-5"/>
+              </svg>
+              Create Election
+            </${Button}>
+          </div>
+        </div>
+      `;
+
+      const steps = [
+        { number: 1, title: "Details", component: renderStep1 },
+        { number: 2, title: "Candidates", component: renderStep2 },
+        { number: 3, title: "Review", component: renderStep3 }
+      ];
+
+      return html`
+        <${Modal} isOpen=${isOpen} onClose=${onClose} title="Create New Election" size="xl">
+          <div className="mb-6">
+            <div className="flex items-center justify-center gap-4">
+              ${steps.map(({ number, title }) => html`
+                <div key=${number} className=${`flex items-center gap-2 ${step >= number ? 'text-brand-400' : 'text-white/40'}`}>
+                  <div className=${`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                    step > number ? 'bg-brand-500 text-white' : 
+                    step === number ? 'bg-brand-500/20 text-brand-400 ring-2 ring-brand-500/30' : 
+                    'bg-white/10 text-white/40'
+                  }`}>
+                    ${step > number ? html`
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20,6 9,17 4,12"/>
+                      </svg>
+                    ` : number}
+                  </div>
+                  <span className="text-sm font-medium">${title}</span>
+                  ${number < steps.length ? html`
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/20">
+                      <polyline points="9,18 15,12 9,6"/>
+                    </svg>
+                  ` : null}
+                </div>
+              `)}
+            </div>
+          </div>
+          
+          ${steps[step - 1].component()}
+        </${Modal}>
+      `;
+    };
+
+    const StatsCard = ({ title, value, change, icon, trend = "up" }) => html`
+      <${Card} className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-white/60 text-sm">${title}</p>
+            <p className="text-2xl font-bold text-white mt-1">${value}</p>
+            ${change ? html`
+              <div className=${`flex items-center gap-1 mt-2 text-xs ${trend === 'up' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points=${trend === 'up' ? "23,6 13.5,15.5 8.5,10.5 1,18" : "23,18 13.5,8.5 8.5,13.5 1,6"}/>
+                  <polyline points=${trend === 'up' ? "17,6 23,6 23,12" : "17,18 23,18 23,12"}/>
+                </svg>
+                ${change}
+              </div>
+            ` : null}
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
+            ${icon}
+          </div>
+        </div>
+      </${Card}>
+    `;
+
+    const ElectionCard = ({ election, onEdit, onDelete, onFreeze, onUnfreeze, onViewResults }) => {
+      const start = dayjs(election.start_time);
+      const end = dayjs(election.end_time);
+      const now = dayjs();
+      
+      const getStatusInfo = () => {
+        if (election.is_frozen) return { color: 'warning', text: 'FROZEN' };
+        if (now.isBefore(start)) return { color: 'info', text: 'SCHEDULED' };
+        if (now.isAfter(end)) return { color: 'danger', text: 'CLOSED' };
+        return { color: 'success', text: 'ACTIVE' };
+      };
+
+      const statusInfo = getStatusInfo();
+
+      return html`
+        <${Card} className="p-6 hover:ring-2 hover:ring-brand-500/30 transition-all">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-white mb-2">${election.title}</h3>
+              <p className="text-white/70 text-sm mb-3 line-clamp-2">${election.description || 'No description provided'}</p>
+            </div>
+            <${Badge} tone=${statusInfo.color} className="ml-3">${statusInfo.text}</${Badge}>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-white/5 rounded-lg p-3">
+              <div className="text-white/50 text-xs">Starts</div>
+              <div className="text-white text-sm font-medium">${start.format('MMM DD, HH:mm')}</div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-3">
+              <div className="text-white/50 text-xs">Ends</div>
+              <div className="text-white text-sm font-medium">${end.format('MMM DD, HH:mm')}</div>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="text-white/60 text-sm">
+              ID: ${election.id} • Created ${dayjs(election.created_at).fromNow()}
+            </div>
+            <div className="flex gap-2">
+              ${statusInfo.text === 'CLOSED' ? html`
+                <${Button} variant="ghost" size="sm" onClick=${() => onViewResults(election.id)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 3v5h5M21 21v-5h-5M21 3l-9 9-4-4-5 5M3 21l9-9 4 4 5-5"/>
+                  </svg>
+                </${Button}>
+              ` : null}
+              
+              ${!election.is_frozen && (statusInfo.text === 'ACTIVE' || statusInfo.text === 'SCHEDULED') ? html`
+                <${Button} variant="ghost" size="sm" onClick=${() => onFreeze(election.id)} title="Freeze Election">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <circle cx="12" cy="16" r="1"/>
+                    <path d="m7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </${Button}>
+              ` : null}
+              
+              ${election.is_frozen ? html`
+                <${Button} variant="ghost" size="sm" onClick=${() => onUnfreeze(election.id)} title="Unfreeze Election">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <circle cx="12" cy="16" r="1"/>
+                    <path d="m7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5"/>
+                    <line x1="12" y1="1" x2="12" y2="3"/>
+                    <line x1="21" y1="4.5" x2="19" y2="6.5"/>
+                    <line x1="3" y1="4.5" x2="5" y2="6.5"/>
+                  </svg>
+                </${Button}>
+              ` : null}
+              
+              <${Button} variant="ghost" size="sm" onClick=${() => onEdit(election)} title="Edit Election">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </${Button}>
+              
+              <${Button} variant="ghost" size="sm" onClick=${() => onDelete(election.id)} title="Delete Election" className="text-rose-400 hover:text-rose-300">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3,6 5,6 21,6"/>
+                  <path d="m19,6v14a2,2 0,0 1,-2,2H7a2,2 0,0 1,-2,-2V6m3,0V4a2,2 0,0 1,2,-2h4a2,2 0,0 1,2,2v2"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/>
+                  <line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+              </${Button}>
+            </div>
+          </div>
+        </${Card}>
+      `;
+    };
+
+    const Dashboard = () => {
+      const { user, apiUrl } = window.__APP__;
+      const [loading, setLoading] = useState(true);
+      const [elections, setElections] = useState([]);
+      const [stats, setStats] = useState({
+        total: 0,
+        active: 0,
+        scheduled: 0,
+        closed: 0
+      });
+      const [showCreateModal, setShowCreateModal] = useState(false);
+      const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+      const loadElections = useCallback(async () => {
+        try {
+          setLoading(true);
+          const response = await fetch(`${apiUrl}/api/elections`);
+          const data = await response.json();
+          const electionsArray = Array.isArray(data) ? data : [];
+          setElections(electionsArray);
+          
+          // Calculate stats
+          const now = dayjs();
+          const stats = electionsArray.reduce((acc, election) => {
+            acc.total++;
+            if (election.is_frozen) return acc;
+            
+            const start = dayjs(election.start_time);
+            const end = dayjs(election.end_time);
+            
+            if (now.isBefore(start)) acc.scheduled++;
+            else if (now.isAfter(end)) acc.closed++;
+            else acc.active++;
+            
+            return acc;
+          }, { total: 0, active: 0, scheduled: 0, closed: 0 });
+          
+          setStats(stats);
+        } catch (error) {
+          console.error('Failed to load elections:', error);
+        } finally {
+          setLoading(false);
+        }
+      }, [apiUrl, refreshTrigger]);
+
+      useEffect(() => {
+        loadElections();
+        const interval = setInterval(loadElections, 30000);
+        return () => clearInterval(interval);
+      }, [loadElections]);
+
+      const handleCreateSuccess = () => {
+        setRefreshTrigger(prev => prev + 1);
+        setShowCreateModal(false);
+      };
+
+      const handleFreeze = async (electionId) => {
+        if (!confirm('Are you sure you want to freeze this election? This will prevent new votes.')) return;
+        
+        try {
+          const response = await fetch(`${apiUrl}/api/elections/${electionId}/freeze`, {
+            method: 'POST'
+          });
+          if (response.ok) {
+            setRefreshTrigger(prev => prev + 1);
+          } else {
+            alert('Failed to freeze election');
+          }
+        } catch (error) {
+          alert('Error freezing election: ' + error.message);
+        }
+      };
+
+      const handleUnfreeze = async (electionId) => {
+        if (!confirm('Are you sure you want to unfreeze this election?')) return;
+        
+        try {
+          const response = await fetch(`${apiUrl}/api/elections/${electionId}/unfreeze`, {
+            method: 'POST'
+          });
+          if (response.ok) {
+            setRefreshTrigger(prev => prev + 1);
+          } else {
+            alert('Failed to unfreeze election');
+          }
+        } catch (error) {
+          alert('Error unfreezing election: ' + error.message);
+        }
+      };
+
+      const handleDelete = async (electionId) => {
+        if (!confirm('Are you sure you want to delete this election? This action cannot be undone.')) return;
+        
+        try {
+          const response = await fetch(`${apiUrl}/api/elections/${electionId}`, {
+            method: 'DELETE'
+          });
+          if (response.ok) {
+            setRefreshTrigger(prev => prev + 1);
+          } else {
+            alert('Failed to delete election');
+          }
+        } catch (error) {
+          alert('Error deleting election: ' + error.message);
+        }
+      };
+
+      const handleViewResults = (electionId) => {
+        window.open(`/results/${electionId}`, '_blank');
+      };
+
+      const handleViewAuditLogs = () => {
+        window.open('/admin/audit-logs', '_blank');
+      };
+
+      const handleManageTemplates = () => {
+        window.open('/admin/templates', '_blank');
+      };
+
+      return html`
+        <div className="min-h-screen bg-[#0b1020]">
+          <${Header} 
+            user=${user} 
+            onCreateElection=${() => setShowCreateModal(true)}
+            onViewAuditLogs=${handleViewAuditLogs}
+            onManageTemplates=${handleManageTemplates}
+          />
+          
+          <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+            <!-- Quick Stats -->
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <${StatsCard} 
+                title="Total Elections" 
+                value=${stats.total}
+                icon=${html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27,6.96 12,12.01 20.73,6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`}
+              />
+              <${StatsCard} 
+                title="Active Elections" 
+                value=${stats.active}
+                change="+2 this week"
+                trend="up"
+                icon=${html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>`}
+              />
+              <${StatsCard} 
+                title="Scheduled" 
+                value=${stats.scheduled}
+                icon=${html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`}
+              />
+              <${StatsCard} 
+                title="Completed" 
+                value=${stats.closed}
+                icon=${html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>`}
+              />
+            </div>
+
+            <!-- Quick Actions -->
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold text-white">Election Management</h2>
+              <div className="flex gap-3">
+                <${Button} variant="secondary" onClick=${() => setRefreshTrigger(prev => prev + 1)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="23,4 23,10 17,10"/>
+                    <polyline points="1,20 1,14 7,14"/>
+                    <path d="m3.51,9a9,9 0,0 1,14.85-3.36L23,10M1,14l4.64,4.36A9,9 0,0 0,20.49,15"/>
+                  </svg>
+                  Refresh
+                </${Button}>
+                <${Button} variant="primary" onClick=${() => setShowCreateModal(true)} className="sm:hidden">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  Create
+                </${Button}>
+              </div>
+            </div>
+
+            <!-- Elections Grid -->
+            ${loading ? html`
+              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+                ${Array(6).fill().map((_, i) => html`
+                  <${Card} key=${i} className="p-6 animate-pulse">
+                    <div className="space-y-3">
+                      <div className="h-4 w-3/4 bg-white/10 rounded"></div>
+                      <div className="h-3 w-1/2 bg-white/10 rounded"></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="h-12 bg-white/10 rounded"></div>
+                        <div className="h-12 bg-white/10 rounded"></div>
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <div className="h-8 w-8 bg-white/10 rounded"></div>
+                        <div className="h-8 w-8 bg-white/10 rounded"></div>
+                        <div className="h-8 w-8 bg-white/10 rounded"></div>
+                      </div>
+                    </div>
+                  </${Card}>
+                `)}
+              </div>
+            ` : elections.length === 0 ? html`
+              <${Card} className="p-12 text-center">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-4 text-white/40">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <h3 className="text-lg font-medium text-white mb-2">No Elections Found</h3>
+                <p className="text-white/60 mb-6">Get started by creating your first election.</p>
+                <${Button} variant="primary" onClick=${() => setShowCreateModal(true)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  Create Your First Election
+                </${Button}>
+              </${Card}>
+            ` : html`
+              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+                ${elections.map(election => html`
+                  <${ElectionCard}
+                    key=${election.id}
+                    election=${election}
+                    onEdit=${() => console.log('Edit:', election.id)}
+                    onDelete=${handleDelete}
+                    onFreeze=${handleFreeze}
+                    onUnfreeze=${handleUnfreeze}
+                    onViewResults=${handleViewResults}
+                  />
+                `)}
+              </div>
+            `}
+          </main>
+
+          <${CreateElectionModal}
+            isOpen=${showCreateModal}
+            onClose=${() => setShowCreateModal(false)}
+            onSuccess=${handleCreateSuccess}
+            apiUrl=${apiUrl}
+          />
+        </div>
+      `;
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(html`<${Dashboard} />`);
+  </script>
+</body>
+</html>
+"""
+
+
 VOTING_PAGE = """<!DOCTYPE html>
 <html>
 <head>
     <title>Vote - NilouVoter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4285f4; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        .candidate { border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 10px 0; background: white; }
-        .candidate h3 { margin-top: 0; }
-        .rank-selector { width: 60px; padding: 5px; font-size: 16px; }
-        .voter-info { background-color: #f0f0f0; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
-        .btn-submit { background-color: #4caf50; color: white; font-size: 18px; padding: 15px 30px; }
-        .btn-submit:hover { background-color: #45a049; }
-        .btn-back { background-color: #6c757d; color: white; }
-        .error { color: #d93025; }
-        .form-group { margin: 15px 0; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group select, .form-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            background: #f8fafc;
+            color: #1e293b;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        /* Animated background */
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+            opacity: 0.6;
+        }
+        
+        .gradient-wash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(120deg, #93c5fd, #e9d5ff, #a5f3fc);
+            background-size: 400% 400%;
+            animation: gradientShift 18s ease-in-out infinite;
+            opacity: 0.3;
+        }
+        
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        .dots-pattern {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(circle at 2px 2px, #3b82f6 2px, transparent 0);
+            background-size: 20px 20px;
+            opacity: 0.1;
+        }
+        
+        .floating-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(48px);
+            opacity: 0.3;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .blob-1 {
+            width: 288px;
+            height: 288px;
+            background: #38bdf8;
+            top: 40px;
+            left: 80px;
+            animation-delay: 0s;
+        }
+        
+        .blob-2 {
+            width: 320px;
+            height: 320px;
+            background: #a855f7;
+            bottom: 80px;
+            right: 128px;
+            animation-delay: 2s;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-20px) scale(1.05); }
+        }
+        
+        .sparkles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .sparkle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #0ea5e9;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(14, 165, 233, 0.6);
+            animation: twinkle 4s ease-in-out infinite;
+        }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.2; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.3); }
+        }
+        
+        /* Main content */
+        .container {
+            position: relative;
+            z-index: 10;
+            min-height: 100vh;
+            max-width: 32rem;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            animation: slideUp 0.8s ease-out;
+        }
+        
+        .university-logo {
+            height: 2rem;
+            object-fit: contain;
+            margin-bottom: 1.5rem;
+            filter: brightness(0.8);
+        }
+        
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: #64748b;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.95);
+            border-color: rgba(148, 163, 184, 0.5);
+            transform: translateY(-1px);
+            color: #475569;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(203, 213, 225, 0.5);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            animation: slideUp 0.8s ease-out 0.2s both;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .election-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .election-dates {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .info-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            background: rgba(14, 165, 233, 0.05);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        
+        .info-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            background: #0ea5e9;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            flex-shrink: 0;
+            margin-top: 0.125rem;
+        }
+        
+        .progress-container {
+            margin: 1.5rem 0;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 0.5rem;
+            background: #f1f5f9;
+            border-radius: 0.25rem;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0ea5e9, #3b82f6);
+            border-radius: 0.25rem;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .candidates-section {
+            margin: 1.5rem 0;
+        }
+        
+        .section-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #334155;
+        }
+        
+        .candidates-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .candidate-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .candidate-card:hover {
+            border-color: #0ea5e9;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(14, 165, 233, 0.15);
+        }
+        
+        .candidate-card.selected {
+            border-color: #0ea5e9;
+            background: rgba(14, 165, 233, 0.05);
+        }
+        
+        .candidate-card.inactive {
+            background: #f8fafc;
+            border-color: #e2e8f0;
+            color: #94a3b8;
+        }
+        
+        .candidate-card.inactive:hover {
+            border-color: #cbd5e1;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .rank-badge {
+            width: 2rem;
+            height: 2rem;
+            background: #0ea5e9;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+        
+        .candidate-card.inactive .rank-badge {
+            background: #cbd5e1;
+            color: #64748b;
+        }
+        
+        .candidate-info {
+            flex: 1;
+        }
+        
+        .candidate-name {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+        
+        .candidate-subtitle {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        
+        .voter-info-section {
+            background: rgba(251, 191, 36, 0.05);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        
+        .voter-info-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #92400e;
+        }
+        
+        .voter-info-description {
+            font-size: 0.875rem;
+            color: #92400e;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        .form-select {
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        
+        .form-select:focus {
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+        
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.5rem;
+            gap: 1rem;
+        }
+        
+        .btn {
+            border: none;
+            border-radius: 0.75rem;
+            padding: 0.875rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-secondary {
+            background: #f8fafc;
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #f1f5f9;
+            color: #475569;
+            transform: translateY(-1px);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
+            font-size: 1rem;
+            padding: 1rem 2rem;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(14, 165, 233, 0.5);
+        }
+        
+        .btn-primary:disabled {
+            background: #cbd5e1;
+            color: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+        
+        .security-notice {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: #059669;
+            margin-top: 1rem;
+        }
+        
+        .security-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+        
+        .help-link {
+            text-align: right;
+            margin-top: 0.5rem;
+        }
+        
+        .help-link a {
+            color: #0ea5e9;
+            text-decoration: underline;
+            font-size: 0.75rem;
+        }
+        
+        .message {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        .message.success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #047857;
+        }
+        
+        .message.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #dc2626;
+        }
+        
+        .success-content h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .confirmation-details {
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 0.875rem;
+        }
+        
+        .success-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+        
+        /* Step indicator */
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2rem;
+            gap: 1rem;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        
+        .step.active {
+            color: #0ea5e9;
+        }
+        
+        .step.completed {
+            color: #10b981;
+        }
+        
+        .step-number {
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: #f1f5f9;
+            color: #94a3b8;
+        }
+        
+        .step.active .step-number {
+            background: #0ea5e9;
+            color: white;
+        }
+        
+        .step.completed .step-number {
+            background: #10b981;
+            color: white;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem 1rem;
+            }
+            
+            .card {
+                padding: 1.5rem;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .button-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .success-actions {
+                flex-direction: column;
+            }
+        }
+        
+        /* Loading states */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .spinner {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Cast Your Vote</h1>
-        <p id="election-title">Loading...</p>
+    <div class="background">
+        <div class="gradient-wash"></div>
+        <div class="dots-pattern"></div>
+        <div class="floating-blob blob-1"></div>
+        <div class="floating-blob blob-2"></div>
+        <div class="sparkles" id="sparkles"></div>
     </div>
     
-    <a href="/dashboard" class="btn btn-back">← Back to Dashboard</a>
-    
-    <div class="voter-info">
-        <h3>Voter Information</h3>
-        <p>Please provide your details for demographic analysis (your vote remains secret):</p>
-        
-        <div class="form-group">
-            <label for="faculty">Faculty:</label>
-            <select id="faculty" required>
-                <option value="">Select Faculty</option>
-                <option value="Engineering">Engineering</option>
-                <option value="Business">Business</option>
-                <option value="Arts">Arts</option>
-                <option value="Science">Science</option>
-                <option value="Medicine">Medicine</option>
-                <option value="Law">Law</option>
-                <option value="Education">Education</option>
-                <option value="IT">Information Technology</option>
-            </select>
+    <main class="container">
+        <div class="header">
+            <img src="https://bump2babyandme.org/wp-content/uploads/2020/02/2016-Monash_2-Black_NEW_TO-SEND_RGB.jpg" 
+                 alt="Monash University" class="university-logo">
         </div>
         
-        <div class="form-group">
-            <label for="gender">Gender:</label>
-            <select id="gender" required>
-                <option value="">Select Gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Non-binary">Non-binary</option>
-                <option value="Prefer not to say">Prefer not to say</option>
-            </select>
+        <a href="/dashboard" class="back-button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m15 18-6-6 6-6"/>
+            </svg>
+            Back to Dashboard
+        </a>
+        
+        <div class="step-indicator">
+            <div class="step active" id="step-rank">
+                <div class="step-number">1</div>
+                <span>Rank</span>
+            </div>
+            <div class="step" id="step-review">
+                <div class="step-number">2</div>
+                <span>Review</span>
+            </div>
+            <div class="step" id="step-done">
+                <div class="step-number">3</div>
+                <span>Submit</span>
+            </div>
         </div>
         
-        <div class="form-group">
-            <label for="study_level">Study Level:</label>
-            <select id="study_level" required>
-                <option value="">Select Study Level</option>
-                <option value="Undergraduate">Undergraduate</option>
-                <option value="Postgraduate">Postgraduate</option>
-                <option value="PhD">PhD</option>
-            </select>
+        <div class="card">
+            <div id="voting-content">
+                <h1 class="election-title" id="election-title">Loading...</h1>
+                <p class="election-dates" id="election-dates">Loading election details...</p>
+                
+                <div class="info-box">
+                    <div class="info-icon">i</div>
+                    <p>Click candidates in order of preference. Your first click is your <strong>highest</strong> preference.</p>
+                </div>
+                
+                <div class="voter-info-section">
+                    <h3 class="voter-info-title">Voter Information</h3>
+                    <p class="voter-info-description">Please provide your details for demographic analysis (your vote remains secret):</p>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="faculty">Faculty:</label>
+                            <select class="form-select" id="faculty" required>
+                                <option value="">Select Faculty</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Business">Business</option>
+                                <option value="Arts">Arts</option>
+                                <option value="Science">Science</option>
+                                <option value="Medicine">Medicine</option>
+                                <option value="Law">Law</option>
+                                <option value="Education">Education</option>
+                                <option value="IT">Information Technology</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="gender">Gender:</label>
+                            <select class="form-select" id="gender" required>
+                                <option value="">Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Non-binary">Non-binary</option>
+                                <option value="Prefer not to say">Prefer not to say</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="study_level">Study Level:</label>
+                            <select class="form-select" id="study_level" required>
+                                <option value="">Select Study Level</option>
+                                <option value="Undergraduate">Undergraduate</option>
+                                <option value="Postgraduate">Postgraduate</option>
+                                <option value="PhD">PhD</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="year_level">Year Level:</label>
+                            <select class="form-select" id="year_level" required>
+                                <option value="">Select Year</option>
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
+                                <option value="5">5+ Year</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="candidates-section">
+                    <h2 class="section-title">Rank Candidates</h2>
+                    <div class="candidates-list" id="candidates-container">
+                        Loading candidates...
+                    </div>
+                </div>
+                
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="resetBallot()">Reset ballot</button>
+                    <button class="btn btn-primary" id="submit-btn" onclick="submitVote()" disabled>
+                        Submit Vote
+                    </button>
+                </div>
+                
+                <div class="security-notice">
+                    <div class="security-icon">✓</div>
+                    <span>Your vote is anonymous and cannot be traced back to your identity.</span>
+                </div>
+                
+                <div class="help-link">
+                    <a href="#" onclick="showHelp()">Help</a>
+                </div>
+            </div>
+            
+            <div id="message"></div>
         </div>
-        
-        <div class="form-group">
-            <label for="year_level">Year Level:</label>
-            <select id="year_level" required>
-                <option value="">Select Year</option>
-                <option value="1">1st Year</option>
-                <option value="2">2nd Year</option>
-                <option value="3">3rd Year</option>
-                <option value="4">4th Year</option>
-                <option value="5">5+ Year</option>
-            </select>
-        </div>
-    </div>
-    
-    <h2>Rank Candidates (1 = Most Preferred)</h2>
-    <div id="candidates-container">Loading candidates...</div>
-    
-    <button class="btn btn-submit" onclick="submitVote()">Submit Vote</button>
-    
-    <div id="message"></div>
+    </main>
     
     <script>
         const electionId = {{ election_id }};
         const userInfo = {{ user_info | tojson }};
         const apiUrl = '{{ api_url }}';
-        let candidates = [];
         
+        let candidates = [];
+        let rankedOrder = [];
+        let currentStep = 'rank';
+        
+        // Initialize sparkles
+        function createSparkles() {
+            const sparklesContainer = document.getElementById('sparkles');
+            for (let i = 0; i < 20; i++) {
+                const sparkle = document.createElement('div');
+                sparkle.className = 'sparkle';
+                sparkle.style.top = Math.random() * 100 + '%';
+                sparkle.style.left = Math.random() * 100 + '%';
+                sparkle.style.animationDelay = Math.random() * 4 + 's';
+                sparkle.style.animationDuration = (4 + Math.random() * 4) + 's';
+                sparklesContainer.appendChild(sparkle);
+            }
+        }
+        
+        // Load election and candidates
         async function loadElection() {
             try {
                 // Load election details
@@ -897,92 +2625,237 @@ VOTING_PAGE = """<!DOCTYPE html>
                 
                 if (election) {
                     document.getElementById('election-title').textContent = election.title;
+                    const startDate = new Date(election.start_time).toLocaleDateString();
+                    const endDate = new Date(election.end_time).toLocaleDateString();
+                    document.getElementById('election-dates').textContent = `Voting period: ${startDate} - ${endDate}`;
                 }
                 
                 // Load candidates
                 const candidatesResponse = await fetch(`${apiUrl}/api/elections/${electionId}/candidates`);
                 candidates = await candidatesResponse.json();
                 
-                const container = document.getElementById('candidates-container');
-                container.innerHTML = candidates.map((candidate, index) => `
-                    <div class="candidate">
-                        <h3>${candidate.name}</h3>
-                        <p><strong>Faculty:</strong> ${candidate.faculty || 'Not specified'}</p>
-                        <p><strong>Manifesto:</strong> ${candidate.manifesto || 'No manifesto provided'}</p>
-                        <label>Preference Rank: 
-                            <select class="rank-selector" data-candidate-id="${candidate.id}">
-                                ${candidates.map((_, i) => 
-                                    `<option value="${i+1}" ${i === index ? 'selected' : ''}>${i+1}</option>`
-                                ).join('')}
-                            </select>
-                        </label>
-                    </div>
-                `).join('');
-                
-                // Add change listeners to prevent duplicate ranks
-                document.querySelectorAll('.rank-selector').forEach(selector => {
-                    selector.addEventListener('change', validateRanks);
-                });
+                renderCandidates();
+                updateProgress();
                 
             } catch (error) {
                 document.getElementById('candidates-container').innerHTML = 
-                    '<div class="error">Failed to load candidates. Please try again.</div>';
+                    '<div style="color: #ef4444; text-align: center; padding: 2rem;">Failed to load candidates. Please try again.</div>';
             }
         }
         
-        function validateRanks() {
-            const selectors = document.querySelectorAll('.rank-selector');
-            const ranks = Array.from(selectors).map(s => parseInt(s.value));
-            const uniqueRanks = new Set(ranks);
+        function renderCandidates() {
+            const container = document.getElementById('candidates-container');
+            container.innerHTML = '';
             
-            if (uniqueRanks.size !== ranks.length) {
-                alert('Each candidate must have a unique rank!');
-                return false;
-            }
-            return true;
+            // Render ranked candidates first
+            rankedOrder.forEach((candidateId, index) => {
+                const candidate = candidates.find(c => c.id === candidateId);
+                if (candidate) {
+                    const card = createCandidateCard(candidate, index + 1, true);
+                    container.appendChild(card);
+                }
+            });
+            
+            // Render unranked candidates
+            candidates.forEach(candidate => {
+                if (!rankedOrder.includes(candidate.id)) {
+                    const card = createCandidateCard(candidate, null, false);
+                    container.appendChild(card);
+                }
+            });
         }
         
-        async function submitVote() {
-            if (!validateRanks()) return;
+        function createCandidateCard(candidate, rank, isRanked) {
+            const card = document.createElement('div');
+            card.className = `candidate-card ${isRanked ? 'selected' : 'inactive'}`;
+            card.onclick = () => toggleCandidate(candidate.id);
             
-            // Get voter traits
+            card.innerHTML = `
+                <div class="rank-badge">${rank || ''}</div>
+                <div class="candidate-info">
+                    <div class="candidate-name">${candidate.name}</div>
+                    <div class="candidate-subtitle">${candidate.faculty || 'Not specified'} • ${candidate.manifesto || 'No manifesto provided'}</div>
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        function toggleCandidate(candidateId) {
+            if (rankedOrder.includes(candidateId)) {
+                // Remove from ranking
+                rankedOrder = rankedOrder.filter(id => id !== candidateId);
+            } else {
+                // Add to ranking
+                rankedOrder.push(candidateId);
+            }
+            
+            renderCandidates();
+            updateProgress();
+            updateSubmitButton();
+        }
+        
+        function updateProgress() {
+            const progress = (rankedOrder.length / candidates.length) * 100;
+            document.getElementById('progress-fill').style.width = progress + '%';
+        }
+        
+        function updateSubmitButton() {
+            const submitBtn = document.getElementById('submit-btn');
+            const allRanked = rankedOrder.length === candidates.length;
+            const formValid = validateForm();
+            
+            submitBtn.disabled = !allRanked || !formValid;
+            submitBtn.textContent = allRanked && formValid ? 'Submit Vote' : 
+                !allRanked ? `Rank ${candidates.length - rankedOrder.length} more candidates` : 'Complete voter information';
+        }
+        
+        function validateForm() {
             const faculty = document.getElementById('faculty').value;
             const gender = document.getElementById('gender').value;
             const studyLevel = document.getElementById('study_level').value;
             const yearLevel = document.getElementById('year_level').value;
             
-            if (!faculty || !gender || !studyLevel || !yearLevel) {
-                alert('Please fill in all voter information fields');
+            return faculty && gender && studyLevel && yearLevel;
+        }
+        
+        function resetBallot() {
+            rankedOrder = [];
+            renderCandidates();
+            updateProgress();
+            updateSubmitButton();
+        }
+        
+        function updateStepIndicator(step) {
+            const steps = ['rank', 'review', 'done'];
+            steps.forEach((stepName, index) => {
+                const stepElement = document.getElementById(`step-${stepName}`);
+                stepElement.classList.remove('active', 'completed');
+                
+                if (stepName === step) {
+                    stepElement.classList.add('active');
+                } else if (steps.indexOf(stepName) < steps.indexOf(step)) {
+                    stepElement.classList.add('completed');
+                }
+            });
+        }
+        
+        function showReviewStep() {
+            currentStep = 'review';
+            updateStepIndicator('review');
+            
+            const content = document.getElementById('voting-content');
+            content.innerHTML = `
+                <h1 class="election-title">Review Your Vote</h1>
+                <p class="election-dates">Please review your ranked choices before submitting your vote.</p>
+                
+                <div class="candidates-section">
+                    <h2 class="section-title">Your Ranked Choices</h2>
+                    <div class="candidates-list">
+                        ${rankedOrder.map((candidateId, index) => {
+                            const candidate = candidates.find(c => c.id === candidateId);
+                            return `
+                                <div class="candidate-card selected">
+                                    <div class="rank-badge">${index + 1}</div>
+                                    <div class="candidate-info">
+                                        <div class="candidate-name">${candidate.name}</div>
+                                        <div class="candidate-subtitle">${candidate.faculty || 'Not specified'} • ${candidate.manifesto || 'No manifesto provided'}</div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                
+                <div class="security-notice">
+                    <div class="security-icon">✓</div>
+                    <span>Your vote is anonymous and cannot be traced back to your identity.</span>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="backToRanking()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m15 18-6-6 6-6"/>
+                        </svg>
+                        Back
+                    </button>
+                    <button class="btn btn-primary" onclick="confirmSubmit()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 6 9 17l-5-5"/>
+                        </svg>
+                        Confirm and Submit
+                    </button>
+                </div>
+                
+                <div class="help-link">
+                    <a href="#" onclick="showHelp()">Help</a>
+                </div>
+            `;
+        }
+        
+        function backToRanking() {
+            currentStep = 'rank';
+            updateStepIndicator('rank');
+            location.reload(); // Simple way to restore original state
+        }
+        
+        async function submitVote() {
+            if (currentStep === 'rank') {
+                // First, validate everything
+                if (rankedOrder.length !== candidates.length) {
+                    alert('Please rank all candidates before proceeding.');
+                    return;
+                }
+                
+                if (!validateForm()) {
+                    alert('Please fill in all voter information fields.');
+                    return;
+                }
+                
+                // Move to review step
+                showReviewStep();
                 return;
             }
-            
-            // Collect preferences
-            const preferences = {};
-            document.querySelectorAll('.rank-selector').forEach(selector => {
-                const candidateId = selector.dataset.candidateId;
-                const rank = parseInt(selector.value);
-                preferences[candidateId] = rank;
-            });
-            
-            // Prepare vote data
-            const voteData = {
-                google_user_info: {
-                    id: userInfo.id,
-                    email: userInfo.email,
-                    name: userInfo.name,
-                    picture: userInfo.picture
-                },
-                election_id: electionId,
-                preferences: preferences,
-                voter_traits: {
-                    faculty: faculty,
-                    gender: gender,
-                    study_level: studyLevel,
-                    year_level: parseInt(yearLevel)
-                }
-            };
+        }
+        
+        async function confirmSubmit() {
+            const submitBtn = event.target;
+            const originalText = submitBtn.textContent;
             
             try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<div class="spinner"></div> Submitting...';
+                
+                // Get voter traits
+                const faculty = document.getElementById('faculty')?.value;
+                const gender = document.getElementById('gender')?.value;
+                const studyLevel = document.getElementById('study_level')?.value;
+                const yearLevel = document.getElementById('year_level')?.value;
+                
+                // Build preferences object
+                const preferences = {};
+                rankedOrder.forEach((candidateId, index) => {
+                    preferences[candidateId] = index + 1;
+                });
+                
+                // Prepare vote data
+                const voteData = {
+                    google_user_info: {
+                        id: userInfo.id,
+                        email: userInfo.email,
+                        name: userInfo.name,
+                        picture: userInfo.picture
+                    },
+                    election_id: electionId,
+                    preferences: preferences,
+                    voter_traits: {
+                        faculty: faculty,
+                        gender: gender,
+                        study_level: studyLevel,
+                        year_level: parseInt(yearLevel)
+                    }
+                };
+                
                 const response = await fetch(`${apiUrl}/api/vote`, {
                     method: 'POST',
                     headers: {
@@ -994,30 +2867,81 @@ VOTING_PAGE = """<!DOCTYPE html>
                 const result = await response.json();
                 
                 if (response.ok) {
-                    document.getElementById('message').innerHTML = `
-                        <div style="background: #d4edda; color: #155724; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                            <h2>✓ Vote Submitted Successfully!</h2>
-                            <p><strong>Confirmation Code:</strong> ${result.confirmation_code}</p>
-                            <p><strong>Receipt Number:</strong> ${result.receipt_number}</p>
-                            <p>Keep these codes for your records. You can verify your vote was counted using the confirmation code.</p>
-                            <a href="/receipt/${result.receipt_number}" class="btn btn-primary" target="_blank">View Receipt</a>
-                            <a href="/dashboard" class="btn btn-secondary">Back to Dashboard</a>
-                        </div>
-                    `;
-                    
-                    // Disable submit button
-                    document.querySelector('.btn-submit').disabled = true;
+                    showSuccessStep(result);
                 } else {
                     throw new Error(result.detail || 'Failed to submit vote');
                 }
+                
             } catch (error) {
-                document.getElementById('message').innerHTML = 
-                    `<div class="error">Error: ${error.message}</div>`;
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+                
+                document.getElementById('message').innerHTML = `
+                    <div class="message error">
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
             }
         }
         
-        // Load election data on page load
-        loadElection();
+        function showSuccessStep(result) {
+            currentStep = 'done';
+            updateStepIndicator('done');
+            
+            const content = document.getElementById('voting-content');
+            content.innerHTML = `
+                <div style="text-align: center; margin-bottom: 2rem;">
+                    <img src="https://bump2babyandme.org/wp-content/uploads/2020/02/2016-Monash_2-Black_NEW_TO-SEND_RGB.jpg" 
+                         alt="Monash University" style="height: 2rem; object-fit: contain; margin-bottom: 1rem;">
+                    <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; color: #059669;">Electronic Voting System</h2>
+                    <p style="font-size: 1.125rem; margin-bottom: 1rem;">Your vote has been recorded successfully!</p>
+                </div>
+                
+                <div class="confirmation-details">
+                    <div style="margin-bottom: 0.5rem;"><strong>Confirmation Code:</strong> ${result.confirmation_code}</div>
+                    <div style="margin-bottom: 0.5rem;"><strong>Receipt Number:</strong> ${result.receipt_number}</div>
+                    <div style="color: #64748b; font-size: 0.875rem;">Keep these codes for your records. You can verify your vote was counted using the confirmation code.</div>
+                </div>
+                
+                <p style="text-align: center; color: #64748b; margin: 1rem 0;">
+                    Election results will be announced after voting closes.
+                </p>
+                
+                <div class="success-actions">
+                    <a href="/dashboard" class="btn btn-primary">
+                        Return to Dashboard
+                    </a>
+                    <a href="/receipt/${result.receipt_number}" class="btn btn-secondary" target="_blank">
+                        View Receipt
+                    </a>
+                    <a href="/verify-vote" class="btn btn-secondary">
+                        Verify Vote
+                    </a>
+                </div>
+            `;
+        }
+        
+        function showHelp() {
+            alert('Help: This is a ranked-choice voting system. Click candidates in order of your preference, with your first choice being your most preferred candidate. All fields must be completed before you can submit your vote.');
+        }
+        
+        // Add form change listeners
+        function setupFormListeners() {
+            const formFields = ['faculty', 'gender', 'study_level', 'year_level'];
+            formFields.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.addEventListener('change', updateSubmitButton);
+                }
+            });
+        }
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            createSparkles();
+            loadElection();
+            setupFormListeners();
+        });
     </script>
 </body>
 </html>
@@ -1123,13 +3047,18 @@ def dashboard():
     if 'user_info' not in session:
         return redirect(url_for('index'))
     
+    # Redirect admins to admin dashboard
+    if session.get('is_admin', False):
+        return redirect(url_for('admin_dashboard'))
+    
     return render_template_string(
-        VOTING_DASHBOARD,
+        VOTING_DASHBOARD,  # Keep the original student dashboard
         user_info=session['user_info'],
         is_admin=session.get('is_admin', False),
         api_token=session.get('api_token'),
         api_url=BACKEND_API_URL
     )
+
 
 @app.route('/vote/<int:election_id>')
 def vote_page(election_id):
@@ -1423,6 +3352,23 @@ def manage_templates():
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
+@app.route('/admin')
+def admin_dashboard():
+    """Modern admin dashboard"""
+    if 'user_info' not in session or not session.get('is_admin'):
+        return redirect(url_for('index'))
+    
+    return render_template_string(
+        ADMIN_DASHBOARD,
+        user_info=session['user_info'],
+        is_admin=True,
+        api_token=session.get('api_token'),
+        api_url=BACKEND_API_URL
+    )
+
+
+
 
 # API proxy endpoints (optional - for additional security)
 @app.route('/api/proxy/vote', methods=['POST'])
